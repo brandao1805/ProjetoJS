@@ -1,69 +1,72 @@
 import * as React from 'react';
-{ id:'9', titulo:'Drip Too Hard', artista:'Lil Baby', capaUrl:'https://cdn-images.dzcdn.net/images/cover/3d845a35fd7849630324107baf07657b/500x500-000000-80-0-0.jpg' },
-{ id:'2', titulo:'Bokaloka', artista:'Vários', capaUrl:'https://cdn-images.dzcdn.net/images/cover/7b8424d36d8d2566a4bc408c1965e4c5/500x500-000000-80-0-0.jpg' },
-{ id:'10', titulo:'Modo Esquece', artista:'MC GP', capaUrl:'https://cdn-images.dzcdn.net/images/cover/bfe4031a9d5c5ff196aa67b8cdac0cf3/500x500-000000-80-0-0.jpg' },
+import { useState, useMemo } from 'react';
+import { View, Text, StyleSheet, ScrollView, Image, TextInput } from 'react-native';
+import { NavigationContainer } from '@react-navigation/native';
+import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+
+const Tab=createBottomTabNavigator();
+const MUSICAS=[
+  { id:'5', titulo:'1 Por Amor 2 Por Dinheiro', artista:'Racionais MCs', capaUrl:'https://cdn-images.dzcdn.net/images/cover/e04b68c5a1aa7a29128d05e7ff9e3084/500x500.jpg' },
+  { id:'8', titulo:'Quero Ser Feliz Também', artista:'Natiruts', capaUrl:'https://cdn-images.dzcdn.net/images/cover/29427c053a8d0175221738d1546b5335/500x500-000000-80-0-0.jpg' },
+  { id:'4', titulo:'Wake Up In The Sky', artista:'Gucci Mane, Bruno Mars, Kodak Black', capaUrl:'https://cdn-images.dzcdn.net/images/cover/93c37fa9c4aa86f5edac9fd0a3ab7b00/500x500-000000-80-0-0.jpg' },
+  { id:'9', titulo:'Drip Too Hard', artista:'Lil Baby', capaUrl:'https://cdn-images.dzcdn.net/images/cover/3d845a35fd7849630324107baf07657b/500x500-000000-80-0-0.jpg' },
+  { id:'2', titulo:'Bokaloka', artista:'Vários', capaUrl:'https://cdn-images.dzcdn.net/images/cover/7b8424d36d8d2566a4bc408c1965e4c5/500x500-000000-80-0-0.jpg' },
+  { id:'10', titulo:'Modo Esquece', artista:'MC GP', capaUrl:'https://cdn-images.dzcdn.net/images/cover/bfe4031a9d5c5ff196aa67b8cdac0cf3/500x500-000000-80-0-0.jpg' },
 ];
 
-
-const KEY_LIKED='@liked_songs';
-const KEY_PLAYLISTS='@playlists';
-const loadLiked=async()=>JSON.parse(await AsyncStorage.getItem(KEY_LIKED)||'[]');
-const saveLiked=async(ids)=>AsyncStorage.setItem(KEY_LIKED,JSON.stringify(ids));
-const loadPlaylists=async()=>JSON.parse(await AsyncStorage.getItem(KEY_PLAYLISTS)||'[]');
-const savePlaylists=async(arr)=>AsyncStorage.setItem(KEY_PLAYLISTS,JSON.stringify(arr));
-
-
-function MenuSection({title, ids}){
-return (
-<View style={{marginTop:20}}>
-<Text style={[styles.title,{fontSize:18}]}>{title}</Text>
-<View style={styles.cardsRow}>
-{MUSICAS.filter(m=>ids.includes(m.id)).map(m=> (
-<View key={m.id} style={styles.card}>
-<Image source={{uri:m.capaUrl}} style={styles.cardImg} />
-<Text style={styles.cardTitle}>{m.titulo}</Text>
-<Text style={styles.cardArtist}>{m.artista}</Text>
-</View>
-))}
-</View>
-</View>
-);
-}
-
-
 function MenuScreen(){
-return (
-<ScrollView contentContainerStyle={styles.screen}>
-<Text style={styles.title}>SpotiFei</Text>
-<Text style={styles.subtitle}>Helpers de armazenamento prontos</Text>
-<MenuSection title="Músicas brasileiras" ids={['5','8']} />
-<MenuSection title="Músicas gringas" ids={['4','9']} />
-<MenuSection title="Em Alta" ids={['2','10']} />
-</ScrollView>
-);
+  return (
+    <ScrollView contentContainerStyle={styles.screen}>
+      <Text style={styles.title}>SpotiFei</Text>
+      <Text style={styles.subtitle}>Menu + Buscar sem like</Text>
+    </ScrollView>
+  );
 }
 
+function BuscarScreen(){
+  const [q,setQ]=useState('');
+  const filtered=useMemo(()=>{
+    const s=q.trim().toLowerCase();
+    if(!s) return MUSICAS;
+    return MUSICAS.filter(m=>m.titulo.toLowerCase().includes(s)||m.artista.toLowerCase().includes(s));
+  },[q]);
+  return (
+    <ScrollView contentContainerStyle={styles.screen}>
+      <Text style={styles.title}>Buscar</Text>
+      <TextInput value={q} onChangeText={setQ} placeholder="Digite..." placeholderTextColor="#8ea0b5" style={styles.input}/>
+      {filtered.map(item=> (
+        <View key={item.id} style={styles.row}>
+          <Image source={{uri:item.capaUrl}} style={styles.cover} />
+          <View style={{marginLeft:12}}>
+            <Text style={styles.cardTitle}>{item.titulo}</Text>
+            <Text style={styles.cardArtist}>{item.artista}</Text>
+          </View>
+        </View>
+      ))}
+    </ScrollView>
+  );
+}
 
 export default function App(){
-return (
-<View style={{flex:1, backgroundColor:'#0b0f14'}}>
-<NavigationContainer>
-<Tab.Navigator screenOptions={{headerShown:false}}>
-<Tab.Screen name="Menu" component={MenuScreen} />
-</Tab.Navigator>
-</NavigationContainer>
-</View>
-);
+  return (
+    <View style={{flex:1, backgroundColor:'#0b0f14'}}>
+      <NavigationContainer>
+        <Tab.Navigator screenOptions={{headerShown:false}}>
+          <Tab.Screen name="Menu" component={MenuScreen}/>
+          <Tab.Screen name="Buscar" component={BuscarScreen}/>
+        </Tab.Navigator>
+      </NavigationContainer>
+    </View>
+  );
 }
 
-
-const styles = StyleSheet.create({
-screen:{padding:16, backgroundColor:'#0b0f14'},
-title:{color:'#fff', fontSize:22, fontWeight:'700'},
-subtitle:{color:'#c9d1d9', marginTop:4},
-cardsRow:{flexDirection:'row', gap:12, marginTop:16, flexWrap:'wrap'},
-card:{width:'47%', backgroundColor:'#101826', borderColor:'#263852', borderWidth:1, borderRadius:16, padding:10},
-cardImg:{width:'100%', height:100, borderRadius:12, marginBottom:8},
-cardTitle:{color:'#fff', fontWeight:'700'},
-cardArtist:{color:'#a5b3c2', fontSize:12},
+const styles=StyleSheet.create({
+  screen:{padding:16, backgroundColor:'#0b0f14'},
+  title:{color:'#fff', fontSize:22, fontWeight:'700'},
+  subtitle:{color:'#c9d1d9', marginTop:4},
+  row:{flexDirection:'row', alignItems:'center', paddingVertical:8},
+  cover:{width:56, height:56, borderRadius:8},
+  cardTitle:{color:'#fff', fontWeight:'700'},
+  cardArtist:{color:'#a5b3c2', fontSize:12},
+  input:{backgroundColor:'#121923', borderColor:'#223045', borderWidth:1, borderRadius:12, color:'#fff', paddingHorizontal:12, paddingVertical:10, marginTop:8}
 });
