@@ -1,8 +1,9 @@
 import * as React from 'react';
-import { useState, useMemo } from 'react';
-import { View, Text, StyleSheet, ScrollView, Image, TextInput } from 'react-native';
+import { useState, useMemo, useEffect } from 'react';
+import { View, Text, StyleSheet, ScrollView, Image, TextInput, TouchableOpacity, Vibration } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const Tab=createBottomTabNavigator();
 const MUSICAS=[
@@ -13,36 +14,51 @@ const MUSICAS=[
   { id:'2', titulo:'Bokaloka', artista:'Vários', capaUrl:'https://cdn-images.dzcdn.net/images/cover/7b8424d36d8d2566a4bc408c1965e4c5/500x500-000000-80-0-0.jpg' },
   { id:'10', titulo:'Modo Esquece', artista:'MC GP', capaUrl:'https://cdn-images.dzcdn.net/images/cover/bfe4031a9d5c5ff196aa67b8cdac0cf3/500x500-000000-80-0-0.jpg' },
 ];
+const KEY_LIKED='@liked_songs';
+const loadLiked=async()=>JSON.parse(await AsyncStorage.getItem(KEY_LIKED)||'[]');
+const saveLiked=async(ids)=>AsyncStorage.setItem(KEY_LIKED,JSON.stringify(ids));
 
 function MenuScreen(){
   return (
     <ScrollView contentContainerStyle={styles.screen}>
       <Text style={styles.title}>SpotiFei</Text>
-      <Text style={styles.subtitle}>Menu + Buscar sem like</Text>
+      <Text style={styles.subtitle}>Buscar com Like</Text>
     </ScrollView>
   );
 }
 
 function BuscarScreen(){
   const [q,setQ]=useState('');
+  const [liked,setLiked]=useState([]);
+  useEffect(()=>{loadLiked().then(setLiked)},[]);
   const filtered=useMemo(()=>{
     const s=q.trim().toLowerCase();
-    if(!s) return MUSICAS;
-    return MUSICAS.filter(m=>m.titulo.toLowerCase().includes(s)||m.artista.toLowerCase().includes(s));
+    if(!s) return MUSICAS; return MUSICAS.filter(m=>m.titulo.toLowerCase().includes(s)||m.artista.toLowerCase().includes(s));
   },[q]);
+  const toggleLike=async(id)=>{
+    const has=liked.includes(id);
+    const next=has? liked.filter(x=>x!==id):[...liked,id];
+    setLiked(next); await saveLiked(next); if(!has) Vibration.vibrate(30);
+  }
   return (
     <ScrollView contentContainerStyle={styles.screen}>
       <Text style={styles.title}>Buscar</Text>
       <TextInput value={q} onChangeText={setQ} placeholder="Digite..." placeholderTextColor="#8ea0b5" style={styles.input}/>
-      {filtered.map(item=> (
-        <View key={item.id} style={styles.row}>
-          <Image source={{uri:item.capaUrl}} style={styles.cover} />
-          <View style={{marginLeft:12}}>
-            <Text style={styles.cardTitle}>{item.titulo}</Text>
-            <Text style={styles.cardArtist}>{item.artista}</Text>
+      {filtered.map(item=> {
+        const on=liked.includes(item.id);
+        return (
+          <View key={item.id} style={styles.row}>
+            <Image source={{uri:item.capaUrl}} style={styles.cover}/>
+            <View style={{flex:1, marginLeft:12}}>
+              <Text style={styles.cardTitle}>{item.titulo}</Text>
+              <Text style={styles.cardArtist}>{item.artista}</Text>
+            </View>
+            <TouchableOpacity onPress={()=>toggleLike(item.id)} style={[styles.tag, on&&styles.tagOn]}>
+              <Text style={[styles.tagText, on&&styles.tagTextOn]}>{on?'♥':'♡'}</Text>
+            </TouchableOpacity>
           </View>
-        </View>
-      ))}
+        );
+      })}
     </ScrollView>
   );
 }
@@ -68,5 +84,9 @@ const styles=StyleSheet.create({
   cover:{width:56, height:56, borderRadius:8},
   cardTitle:{color:'#fff', fontWeight:'700'},
   cardArtist:{color:'#a5b3c2', fontSize:12},
-  input:{backgroundColor:'#121923', borderColor:'#223045', borderWidth:1, borderRadius:12, color:'#fff', paddingHorizontal:12, paddingVertical:10, marginTop:8}
+  input:{backgroundColor:'#121923', borderColor:'#223045', borderWidth:1, borderRadius:12, color:'#fff', paddingHorizontal:12, paddingVertical:10, marginTop:8},
+  tag:{borderColor:'#2e3d56', borderWidth:1, paddingHorizontal:10, paddingVertical:6, borderRadius:10},
+  tagOn:{backgroundColor:'#1db95422', borderColor:'#1db954'},
+  tagText:{color:'#c9d1d9', fontWeight:'700'},
+  tagTextOn:{color:'#1db954'},
 });
