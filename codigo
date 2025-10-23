@@ -7,13 +7,44 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const Tab=createBottomTabNavigator();
 const MUSICAS=[
-  { id:'5', titulo:'1 Por Amor 2 Por Dinheiro', artista:'Racionais MCs', capaUrl:'https://cdn-images.dzcdn.net/images/cover/e04b68c5a1aa7a29128d05e7ff9e3084/500x500.jpg' },
-  { id:'8', titulo:'Quero Ser Feliz Também', artista:'Natiruts', capaUrl:'https://cdn-images.dzcdn.net/images/cover/29427c053a8d0175221738d1546b5335/500x500-000000-80-0-0.jpg' },
-  { id:'4', titulo:'Wake Up In The Sky', artista:'Gucci Mane, Bruno Mars, Kodak Black', capaUrl:'https://cdn-images.dzcdn.net/images/cover/93c37fa9c4aa86f5edac9fd0a3ab7b00/500x500-000000-80-0-0.jpg' },
-  { id:'9', titulo:'Drip Too Hard', artista:'Lil Baby', capaUrl:'https://cdn-images.dzcdn.net/images/cover/3d845a35fd7849630324107baf07657b/500x500-000000-80-0-0.jpg' },
-  { id:'2', titulo:'Bokaloka', artista:'Vários', capaUrl:'https://cdn-images.dzcdn.net/images/cover/7b8424d36d8d2566a4bc408c1965e4c5/500x500-000000-80-0-0.jpg' },
-  { id:'10', titulo:'Modo Esquece', artista:'MC GP', capaUrl:'https://cdn-images.dzcdn.net/images/cover/bfe4031a9d5c5ff196aa67b8cdac0cf3/500x500-000000-80-0-0.jpg' },
+  { 
+    id:'5', 
+    titulo:'1 Por Amor 2 Por Dinheiro', 
+    artista:'Racionais MCs', 
+    capaUrl:'https://cdn-images.dzcdn.net/images/cover/e04b68c5a1aa7a29128d05e7ff9e3084/500x500.jpg' 
+  },
+  { 
+    id:'8', 
+    titulo:'Quero Ser Feliz Também', 
+    artista:'Natiruts', 
+    capaUrl:'https://cdn-images.dzcdn.net/images/cover/29427c053a8d0175221738d1546b5335/500x500-000000-80-0-0.jpg' 
+  },
+  { 
+    id:'4', 
+    titulo:'Wake Up In The Sky', 
+    artista:'Gucci Mane, Bruno Mars, Kodak Black', 
+    capaUrl:'https://cdn-images.dzcdn.net/images/cover/93c37fa9c4aa86f5edac9fd0a3ab7b00/500x500-000000-80-0-0.jpg' 
+  },
+  { 
+    id:'9', 
+    titulo:'Drip Too Hard', 
+    artista:'Lil Baby', 
+    capaUrl:'https://cdn-images.dzcdn.net/images/cover/3d845a35fd7849630324107baf07657b/500x500-000000-80-0-0.jpg' 
+  },
+  { 
+    id:'2', 
+    titulo:'Bokaloka', 
+    artista:'Vários', 
+    capaUrl:'https://cdn-images.dzcdn.net/images/cover/7b8424d36d8d2566a4bc408c1965e4c5/500x500-000000-80-0-0.jpg' 
+  },
+  { 
+    id:'10', 
+    titulo:'Modo Esquece', 
+    artista:'MC GP', 
+    capaUrl:'https://cdn-images.dzcdn.net/images/cover/bfe4031a9d5c5ff196aa67b8cdac0cf3/500x500-000000-80-0-0.jpg' 
+  },
 ];
+
 const KEY_LIKED='@liked_songs';
 const loadLiked=async()=>JSON.parse(await AsyncStorage.getItem(KEY_LIKED)||'[]');
 const saveLiked=async(ids)=>AsyncStorage.setItem(KEY_LIKED,JSON.stringify(ids));
