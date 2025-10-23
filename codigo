@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { useState, useMemo, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, Image, TextInput, TouchableOpacity, Vibration } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Image, TextInput, TouchableOpacity } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -22,7 +22,7 @@ function MenuScreen(){
   return (
     <ScrollView contentContainerStyle={styles.screen}>
       <Text style={styles.title}>SpotiFei</Text>
-      <Text style={styles.subtitle}>Buscar com Like</Text>
+      <Text style={styles.subtitle}>Favoritas adicionada</Text>
     </ScrollView>
   );
 }
@@ -38,7 +38,7 @@ function BuscarScreen(){
   const toggleLike=async(id)=>{
     const has=liked.includes(id);
     const next=has? liked.filter(x=>x!==id):[...liked,id];
-    setLiked(next); await saveLiked(next); if(!has) Vibration.vibrate(30);
+    setLiked(next); await saveLiked(next);
   }
   return (
     <ScrollView contentContainerStyle={styles.screen}>
@@ -63,6 +63,28 @@ function BuscarScreen(){
   );
 }
 
+function BibliotecaScreen(){
+  const [liked,setLiked]=useState([]);
+  useEffect(()=>{const t=setInterval(()=>loadLiked().then(setLiked),1000); return ()=>clearInterval(t)},[]);
+  const itens=MUSICAS.filter(m=>liked.includes(m.id));
+  return (
+    <ScrollView contentContainerStyle={styles.screen}>
+      <Text style={styles.title}>Favoritas ({itens.length})</Text>
+      {itens.length===0? <Text style={styles.subtitle}>Sem músicas curtidas.</Text>:
+        itens.map(i=> (
+          <View key={i.id} style={styles.row}>
+            <Image source={{uri:i.capaUrl}} style={styles.cover}/>
+            <View style={{marginLeft:12}}>
+              <Text style={styles.cardTitle}>{i.titulo}</Text>
+              <Text style={styles.cardArtist}>{i.artista}</Text>
+            </View>
+          </View>
+        ))
+      }
+    </ScrollView>
+  );
+}
+
 export default function App(){
   return (
     <View style={{flex:1, backgroundColor:'#0b0f14'}}>
@@ -70,6 +92,7 @@ export default function App(){
         <Tab.Navigator screenOptions={{headerShown:false}}>
           <Tab.Screen name="Menu" component={MenuScreen}/>
           <Tab.Screen name="Buscar" component={BuscarScreen}/>
+          <Tab.Screen name="Favoritas" component={BibliotecaScreen}/>
         </Tab.Navigator>
       </NavigationContainer>
     </View>
