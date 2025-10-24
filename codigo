@@ -1,9 +1,8 @@
 import * as React from 'react';
 import { useState, useMemo, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, ScrollView, Image, TextInput, TouchableOpacity, Alert } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Image, TextInput, TouchableOpacity } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Audio } from 'expo-av';
 
 const Tab=createBottomTabNavigator();
@@ -51,38 +50,31 @@ const MUSICAS=[
     audioModule:require('./assets/Modo Esquece.mp3')
   },
 ];
-const KEY_LIKED='@liked_songs';
-const loadLiked=async()=>JSON.parse(await AsyncStorage.getItem(KEY_LIKED)||'[]');
-const saveLiked=async(ids)=>AsyncStorage.setItem(KEY_LIKED,JSON.stringify(ids));
 
 function useAudioPlayer(){
   const ref=useRef(null); const [playingId,setPlayingId]=useState(null); const [isPlaying,setIsPlaying]=useState(false);
   async function stop(){ if(ref.current){ try{ await ref.current.stopAsync(); await ref.current.unloadAsync(); }catch{} ref.current=null; } }
-  async function play(track){
-    if(!track) return;
-    if(playingId===track.id && isPlaying){ await pause(); return; }
-    await stop();
-    try{ const {sound}=await Audio.Sound.createAsync(track.audioModule,{shouldPlay:true}); ref.current=sound; setPlayingId(track.id); setIsPlaying(true); }
-    catch(e){ Alert.alert('Erro','Não foi possível reproduzir.'); }
-  }
+  async function play(track){ if(!track) return; if(playingId===track.id && isPlaying){ await pause(); return; } await stop(); const {sound}=await Audio.Sound.createAsync(track.audioModule,{shouldPlay:true}); ref.current=sound; setPlayingId(track.id); setIsPlaying(true); }
   async function pause(){ if(ref.current){ await ref.current.pauseAsync(); setIsPlaying(false); } }
   useEffect(()=>()=>{ if(ref.current) ref.current.unloadAsync(); },[]);
   return {play,pause,isPlaying,playingId};
 }
 
-function MenuScreen(){
+function NowPlayingBar({current, player}){
+  if(!current) return null;
+  const isThis=player.playingId===current.id && player.isPlaying;
   return (
-    <ScrollView contentContainerStyle={styles.screen}>
-      <Text style={styles.title}>SpotiFei</Text>
-      <Text style={styles.subtitle}>Áudio básico habilitado</Text>
-    </ScrollView>
+    <View style={styles.bar}>
+      <Text style={styles.barText}>{current.titulo}</Text>
+      <TouchableOpacity onPress={()=> isThis? player.pause(): player.play(current)} style={styles.barBtn}>
+        <Text style={styles.barBtnText}>{isThis? '❚❚':'▶'}</Text>
+      </TouchableOpacity>
+    </View>
   );
 }
 
-function BuscarScreen({player}){
+function BuscarScreen({player,setCurrent}){
   const [q,setQ]=useState('');
-  const [liked,setLiked]=useState([]);
-  useEffect(()=>{loadLiked().then(setLiked)},[]);
   const filtered=useMemo(()=>{
     const s=q.trim().toLowerCase();
     if(!s) return MUSICAS; return MUSICAS.filter(m=>m.titulo.toLowerCase().includes(s)||m.artista.toLowerCase().includes(s));
@@ -91,35 +83,38 @@ function BuscarScreen({player}){
     <ScrollView contentContainerStyle={styles.screen}>
       <Text style={styles.title}>Buscar</Text>
       <TextInput value={q} onChangeText={setQ} placeholder="Digite..." placeholderTextColor="#8ea0b5" style={styles.input}/>
-      {filtered.map(item=>{
-        const isThis=player.playingId===item.id && player.isPlaying;
-        return (
-          <View key={item.id} style={styles.row}>
-            <Image source={{uri:item.capaUrl}} style={styles.cover}/>
-            <View style={{flex:1, marginLeft:12}}>
-              <Text style={styles.cardTitle}>{item.titulo}</Text>
-              <Text style={styles.cardArtist}>{item.artista}</Text>
-            </View>
-            <TouchableOpacity onPress={()=> isThis? player.pause(): player.play(item)} style={styles.tag}>
-              <Text style={styles.tagText}>{isThis? 'Pause':'Play'}</Text>
-            </TouchableOpacity>
+      {filtered.map(item=> (
+        <View key={item.id} style={styles.row}>
+          <Image source={{uri:item.capaUrl}} style={styles.cover}/>
+          <View style={{flex:1, marginLeft:12}}>
+            <Text style={styles.cardTitle}>{item.titulo}</Text>
+            <Text style={styles.cardArtist}>{item.artista}</Text>
           </View>
-        );
-      })}
+          <TouchableOpacity onPress={()=>{ setCurrent(item); player.play(item); }} style={styles.tag}>
+            <Text style={styles.tagText}>Play</Text>
+          </TouchableOpacity>
+        </View>
+      ))}
     </ScrollView>
   );
 }
 
+function MenuScreen(){
+  return (<ScrollView contentContainerStyle={styles.screen}><Text style={styles.title}>SpotiFei</Text></ScrollView>);
+}
+
 export default function App(){
   const player=useAudioPlayer();
+  const [current,setCurrent]=useState(null);
   return (
     <View style={{flex:1, backgroundColor:'#0b0f14'}}>
       <NavigationContainer>
         <Tab.Navigator screenOptions={{headerShown:false}}>
           <Tab.Screen name="Menu" component={MenuScreen}/>
-          <Tab.Screen name="Buscar">{()=><BuscarScreen player={player}/>}</Tab.Screen>
+          <Tab.Screen name="Buscar">{()=><BuscarScreen player={player} setCurrent={setCurrent}/>}</Tab.Screen>
         </Tab.Navigator>
       </NavigationContainer>
+      <NowPlayingBar current={current} player={player}/>
     </View>
   );
 }
@@ -127,7 +122,6 @@ export default function App(){
 const styles=StyleSheet.create({
   screen:{padding:16, backgroundColor:'#0b0f14'},
   title:{color:'#fff', fontSize:22, fontWeight:'700'},
-  subtitle:{color:'#c9d1d9', marginTop:4},
   row:{flexDirection:'row', alignItems:'center', paddingVertical:8},
   cover:{width:56, height:56, borderRadius:8},
   cardTitle:{color:'#fff', fontWeight:'700'},
@@ -135,4 +129,8 @@ const styles=StyleSheet.create({
   input:{backgroundColor:'#121923', borderColor:'#223045', borderWidth:1, borderRadius:12, color:'#fff', paddingHorizontal:12, paddingVertical:10, marginTop:8},
   tag:{borderColor:'#2e3d56', borderWidth:1, paddingHorizontal:10, paddingVertical:6, borderRadius:10},
   tagText:{color:'#c9d1d9', fontWeight:'700'},
+  bar:{position:'absolute', left:12, right:12, bottom:12, height:56, backgroundColor:'#121923', borderWidth:1, borderColor:'#223045', borderRadius:14, paddingHorizontal:16, flexDirection:'row', alignItems:'center', justifyContent:'space-between'},
+  barText:{color:'#fff', fontWeight:'700'},
+  barBtn:{backgroundColor:'#fff', width:44, height:44, borderRadius:22, alignItems:'center', justifyContent:'center'},
+  barBtnText:{fontWeight:'800'},
 });
