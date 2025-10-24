@@ -1,9 +1,10 @@
 import * as React from 'react';
-import { useState, useMemo, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, Image, TextInput, TouchableOpacity } from 'react-native';
+import { useState, useMemo, useEffect, useRef } from 'react';
+import { View, Text, StyleSheet, ScrollView, Image, TextInput, TouchableOpacity, Alert } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Audio } from 'expo-av';
 
 const Tab=createBottomTabNavigator();
 const MUSICAS=[
@@ -11,54 +12,74 @@ const MUSICAS=[
     id:'5', 
     titulo:'1 Por Amor 2 Por Dinheiro', 
     artista:'Racionais MCs', 
-    capaUrl:'https://cdn-images.dzcdn.net/images/cover/e04b68c5a1aa7a29128d05e7ff9e3084/500x500.jpg' 
+    capaUrl:'https://cdn-images.dzcdn.net/images/cover/e04b68c5a1aa7a29128d05e7ff9e3084/500x500.jpg'
+    audioModule:require('./assets/1 Por Amor 2 Por Dinheiro.mp3')
   },
   { 
     id:'8', 
     titulo:'Quero Ser Feliz Também', 
     artista:'Natiruts', 
-    capaUrl:'https://cdn-images.dzcdn.net/images/cover/29427c053a8d0175221738d1546b5335/500x500-000000-80-0-0.jpg' 
+    capaUrl:'https://cdn-images.dzcdn.net/images/cover/29427c053a8d0175221738d1546b5335/500x500-000000-80-0-0.jpg'
+    audioModule:require('./assets/Quero Ser Feliz Tambem.mp3')
   },
   { 
     id:'4', 
     titulo:'Wake Up In The Sky', 
     artista:'Gucci Mane, Bruno Mars, Kodak Black', 
-    capaUrl:'https://cdn-images.dzcdn.net/images/cover/93c37fa9c4aa86f5edac9fd0a3ab7b00/500x500-000000-80-0-0.jpg' 
+    capaUrl:'https://cdn-images.dzcdn.net/images/cover/93c37fa9c4aa86f5edac9fd0a3ab7b00/500x500-000000-80-0-0.jpg'
+    audioModule:require('./assets/Wake Up In The Sky.mp3') },
   },
   { 
     id:'9', 
     titulo:'Drip Too Hard', 
     artista:'Lil Baby', 
-    capaUrl:'https://cdn-images.dzcdn.net/images/cover/3d845a35fd7849630324107baf07657b/500x500-000000-80-0-0.jpg' 
+    capaUrl:'https://cdn-images.dzcdn.net/images/cover/3d845a35fd7849630324107baf07657b/500x500-000000-80-0-0.jpg'
+    audioModule:require('./assets/Drip Too Hard')
   },
   { 
     id:'2', 
     titulo:'Bokaloka', 
     artista:'Vários', 
-    capaUrl:'https://cdn-images.dzcdn.net/images/cover/7b8424d36d8d2566a4bc408c1965e4c5/500x500-000000-80-0-0.jpg' 
+    capaUrl:'https://cdn-images.dzcdn.net/images/cover/7b8424d36d8d2566a4bc408c1965e4c5/500x500-000000-80-0-0.jpg'
+    audioModule:require('./assets/Bokaloka.mp3')
   },
   { 
     id:'10', 
     titulo:'Modo Esquece', 
     artista:'MC GP', 
-    capaUrl:'https://cdn-images.dzcdn.net/images/cover/bfe4031a9d5c5ff196aa67b8cdac0cf3/500x500-000000-80-0-0.jpg' 
+    capaUrl:'https://cdn-images.dzcdn.net/images/cover/bfe4031a9d5c5ff196aa67b8cdac0cf3/500x500-000000-80-0-0.jpg'
+    audioModule:require('./assets/Modo Esquece.mp3')
   },
 ];
-
 const KEY_LIKED='@liked_songs';
 const loadLiked=async()=>JSON.parse(await AsyncStorage.getItem(KEY_LIKED)||'[]');
 const saveLiked=async(ids)=>AsyncStorage.setItem(KEY_LIKED,JSON.stringify(ids));
+
+function useAudioPlayer(){
+  const ref=useRef(null); const [playingId,setPlayingId]=useState(null); const [isPlaying,setIsPlaying]=useState(false);
+  async function stop(){ if(ref.current){ try{ await ref.current.stopAsync(); await ref.current.unloadAsync(); }catch{} ref.current=null; } }
+  async function play(track){
+    if(!track) return;
+    if(playingId===track.id && isPlaying){ await pause(); return; }
+    await stop();
+    try{ const {sound}=await Audio.Sound.createAsync(track.audioModule,{shouldPlay:true}); ref.current=sound; setPlayingId(track.id); setIsPlaying(true); }
+    catch(e){ Alert.alert('Erro','Não foi possível reproduzir.'); }
+  }
+  async function pause(){ if(ref.current){ await ref.current.pauseAsync(); setIsPlaying(false); } }
+  useEffect(()=>()=>{ if(ref.current) ref.current.unloadAsync(); },[]);
+  return {play,pause,isPlaying,playingId};
+}
 
 function MenuScreen(){
   return (
     <ScrollView contentContainerStyle={styles.screen}>
       <Text style={styles.title}>SpotiFei</Text>
-      <Text style={styles.subtitle}>Favoritas adicionada</Text>
+      <Text style={styles.subtitle}>Áudio básico habilitado</Text>
     </ScrollView>
   );
 }
 
-function BuscarScreen(){
+function BuscarScreen({player}){
   const [q,setQ]=useState('');
   const [liked,setLiked]=useState([]);
   useEffect(()=>{loadLiked().then(setLiked)},[]);
@@ -66,17 +87,12 @@ function BuscarScreen(){
     const s=q.trim().toLowerCase();
     if(!s) return MUSICAS; return MUSICAS.filter(m=>m.titulo.toLowerCase().includes(s)||m.artista.toLowerCase().includes(s));
   },[q]);
-  const toggleLike=async(id)=>{
-    const has=liked.includes(id);
-    const next=has? liked.filter(x=>x!==id):[...liked,id];
-    setLiked(next); await saveLiked(next);
-  }
   return (
     <ScrollView contentContainerStyle={styles.screen}>
       <Text style={styles.title}>Buscar</Text>
       <TextInput value={q} onChangeText={setQ} placeholder="Digite..." placeholderTextColor="#8ea0b5" style={styles.input}/>
-      {filtered.map(item=> {
-        const on=liked.includes(item.id);
+      {filtered.map(item=>{
+        const isThis=player.playingId===item.id && player.isPlaying;
         return (
           <View key={item.id} style={styles.row}>
             <Image source={{uri:item.capaUrl}} style={styles.cover}/>
@@ -84,8 +100,8 @@ function BuscarScreen(){
               <Text style={styles.cardTitle}>{item.titulo}</Text>
               <Text style={styles.cardArtist}>{item.artista}</Text>
             </View>
-            <TouchableOpacity onPress={()=>toggleLike(item.id)} style={[styles.tag, on&&styles.tagOn]}>
-              <Text style={[styles.tagText, on&&styles.tagTextOn]}>{on?'♥':'♡'}</Text>
+            <TouchableOpacity onPress={()=> isThis? player.pause(): player.play(item)} style={styles.tag}>
+              <Text style={styles.tagText}>{isThis? 'Pause':'Play'}</Text>
             </TouchableOpacity>
           </View>
         );
@@ -94,36 +110,14 @@ function BuscarScreen(){
   );
 }
 
-function BibliotecaScreen(){
-  const [liked,setLiked]=useState([]);
-  useEffect(()=>{const t=setInterval(()=>loadLiked().then(setLiked),1000); return ()=>clearInterval(t)},[]);
-  const itens=MUSICAS.filter(m=>liked.includes(m.id));
-  return (
-    <ScrollView contentContainerStyle={styles.screen}>
-      <Text style={styles.title}>Favoritas ({itens.length})</Text>
-      {itens.length===0? <Text style={styles.subtitle}>Sem músicas curtidas.</Text>:
-        itens.map(i=> (
-          <View key={i.id} style={styles.row}>
-            <Image source={{uri:i.capaUrl}} style={styles.cover}/>
-            <View style={{marginLeft:12}}>
-              <Text style={styles.cardTitle}>{i.titulo}</Text>
-              <Text style={styles.cardArtist}>{i.artista}</Text>
-            </View>
-          </View>
-        ))
-      }
-    </ScrollView>
-  );
-}
-
 export default function App(){
+  const player=useAudioPlayer();
   return (
     <View style={{flex:1, backgroundColor:'#0b0f14'}}>
       <NavigationContainer>
         <Tab.Navigator screenOptions={{headerShown:false}}>
           <Tab.Screen name="Menu" component={MenuScreen}/>
-          <Tab.Screen name="Buscar" component={BuscarScreen}/>
-          <Tab.Screen name="Favoritas" component={BibliotecaScreen}/>
+          <Tab.Screen name="Buscar">{()=><BuscarScreen player={player}/>}</Tab.Screen>
         </Tab.Navigator>
       </NavigationContainer>
     </View>
@@ -140,7 +134,5 @@ const styles=StyleSheet.create({
   cardArtist:{color:'#a5b3c2', fontSize:12},
   input:{backgroundColor:'#121923', borderColor:'#223045', borderWidth:1, borderRadius:12, color:'#fff', paddingHorizontal:12, paddingVertical:10, marginTop:8},
   tag:{borderColor:'#2e3d56', borderWidth:1, paddingHorizontal:10, paddingVertical:6, borderRadius:10},
-  tagOn:{backgroundColor:'#1db95422', borderColor:'#1db954'},
   tagText:{color:'#c9d1d9', fontWeight:'700'},
-  tagTextOn:{color:'#1db954'},
 });
