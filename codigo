@@ -1,13 +1,21 @@
 import * as React from 'react';
 import { useState, useEffect, useRef, useMemo } from 'react';
-import { View, Text, TextInput, FlatList, TouchableOpacity, Image, StyleSheet, Alert, Vibration, ScrollView, } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, Image, StyleSheet, Alert, Vibration, ScrollView, } from 'react-native';
+
+// Safe area para respeitar notch/relógio/status bar (iOS e Android)
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useIsFocused, NavigationContainer } from '@react-navigation/native';
+
+// Navegação: NavigationContainer (default export) e useIsFocused (named)
+import { NavigationContainer } from '@react-navigation/native';
+import { useIsFocused } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Audio } from 'expo-av';
 
-// ---------------------- MOCK DE DADOS ----------------------
+// -------------------------------------------------------------------
+// MOCK DE DADOS (capas por URL; áudios locais via require())
+// -------------------------------------------------------------------
 const MUSICAS = [
   {
     id: '1',
@@ -19,10 +27,10 @@ const MUSICAS = [
   {
     id: '2',
     titulo: 'Bokaloka',
-    artista: 'DJ Boy, Kako, Mc Joaozinho VT, Mc Don Juan, Mc Tuto, Mc V7, Mc Vine7, Mc Pê Leal',
+    artista:
+      'DJ Boy, Kako, Mc Joaozinho VT, Mc Don Juan, Mc Tuto, Mc V7, Mc Vine7, Mc Pê Leal',
     capaUrl:
       'https://cdn-images.dzcdn.net/images/cover/7b8424d36d8d2566a4bc408c1965e4c5/500x500-000000-80-0-0.jpg',
-    audioModule: require('./assets/track2.mp3'),
   },
   {
     id: '3',
@@ -30,7 +38,6 @@ const MUSICAS = [
     artista: 'Matuê, WIU, Teto',
     capaUrl:
       'https://cdn-images.dzcdn.net/images/cover/c960508dc43237db89609c0b7211987e/500x500.jpg',
-    audioModule: require('./assets/track3.mp3'),
   },
   {
     id: '4',
@@ -38,7 +45,6 @@ const MUSICAS = [
     artista: 'Gucci Mane, Bruno Mars, Kodak Black',
     capaUrl:
       'https://cdn-images.dzcdn.net/images/cover/93c37fa9c4aa86f5edac9fd0a3ab7b00/500x500-000000-80-0-0.jpg',
-    audioModule: require('./assets/Wake Up In The Sky.mp3'),
   },
   {
     id: '5',
@@ -46,7 +52,6 @@ const MUSICAS = [
     artista: 'Racionais MCs',
     capaUrl:
       'https://cdn-images.dzcdn.net/images/cover/e04b68c5a1aa7a29128d05e7ff9e3084/500x500.jpg',
-    audioModule: require('./assets/1 Por Amor 2 Por Dinheiro.mp3'),
   },
   {
     id: '6',
@@ -54,7 +59,6 @@ const MUSICAS = [
     artista: 'Snoop Dogg ft. Pharrell Williams',
     capaUrl:
       'https://cdn-images.dzcdn.net/images/cover/eea35658898e296aa8b5d817827e6aaf/500x500-000000-80-0-0.jpg',
-    audioModule: require('./assets/Beautiful.mp3'),
   },
   {
     id: '7',
@@ -62,7 +66,6 @@ const MUSICAS = [
     artista: 'Travis Scott',
     capaUrl:
       'https://cdn-images.dzcdn.net/images/cover/7df7ac6028591a5622f24cf32a555510/500x500-000000-80-0-0.jpg',
-    audioModule: require('./assets/YOSEMITE.mp3'),
   },
   {
     id: '8',
@@ -70,7 +73,6 @@ const MUSICAS = [
     artista: 'Natiruts',
     capaUrl:
       'https://cdn-images.dzcdn.net/images/cover/29427c053a8d0175221738d1546b5335/500x500-000000-80-0-0.jpg',
-    audioModule: require('./assets/Quero Ser Feliz Também.mp3'),
   },
   {
     id: '9',
@@ -78,7 +80,6 @@ const MUSICAS = [
     artista: 'Lil Baby',
     capaUrl:
       'https://cdn-images.dzcdn.net/images/cover/3d845a35fd7849630324107baf07657b/500x500-000000-80-0-0.jpg',
-    audioModule: require('./assets/Drip Too Hard.mp3'),
   },
   {
     id: '10',
@@ -86,7 +87,6 @@ const MUSICAS = [
     artista: 'MC GP',
     capaUrl:
       'https://cdn-images.dzcdn.net/images/cover/bfe4031a9d5c5ff196aa67b8cdac0cf3/500x500-000000-80-0-0.jpg',
-    audioModule: require('./assets/Modo Esquece.mp3'),
   },
   {
     id: '11',
@@ -94,7 +94,6 @@ const MUSICAS = [
     artista: 'Queen',
     capaUrl:
       'https://cdn-images.dzcdn.net/images/cover/8b8fc5d117f9357b79f0a0a410a170e8/500x500-000000-80-0-0.jpg',
-    audioModule: require('./assets/Somebody To Love.mp3'),
   },
   {
     id: '12',
@@ -102,15 +101,15 @@ const MUSICAS = [
     artista: 'Matuê, WIU, Teto',
     capaUrl:
       'https://cdn-images.dzcdn.net/images/cover/6a607b99dfcb2dcd32f787ed0e11bf41/500x500-000000-80-0-0.jpg',
-    audioModule: require('./assets/Flow Espacial.mp3'),
   },
-
 ];
 
 const KEY_LIKED = '@liked_songs';
 const KEY_PLAYLISTS = '@playlists';
 
-// ---------------------- ARMAZENAMENTO ----------------------
+// -------------------------------------------------------------------
+// AsyncStorage helpers (salva/recupera curtidas e playlists)
+// -------------------------------------------------------------------
 async function loadLiked() {
   const raw = await AsyncStorage.getItem(KEY_LIKED);
   return raw ? JSON.parse(raw) : [];
@@ -126,12 +125,15 @@ async function savePlaylists(arr) {
   await AsyncStorage.setItem(KEY_PLAYLISTS, JSON.stringify(arr));
 }
 
-// ---------------------- PLAYER ----------------------
+// -------------------------------------------------------------------
+// Hook de Player local (expo-av) — toca um som por vez
+// -------------------------------------------------------------------
 function useAudioPlayer() {
-  const soundRef = useRef(null);
+  const soundRef = useRef(null); // guarda a instância do som atual
   const [playingId, setPlayingId] = useState(null);
   const [isPlaying, setIsPlaying] = useState(false);
 
+  // Para o som corrente (se houver) e libera memória
   async function stopCurrent() {
     if (soundRef.current) {
       try {
@@ -142,7 +144,9 @@ function useAudioPlayer() {
     }
   }
 
+  // Toca/pausa a faixa informada
   async function play(track) {
+    // Se já é a mesma música e está tocando → vira pause
     if (playingId === track.id && isPlaying) {
       await pause();
       return;
@@ -151,13 +155,14 @@ function useAudioPlayer() {
 
     try {
       const { sound } = await Audio.Sound.createAsync(track.audioModule, {
-        shouldPlay: true,
+        shouldPlay: true, // já inicia tocando
       });
       soundRef.current = sound;
       setPlayingId(track.id);
       setIsPlaying(true);
-    } catch {
+    } catch (e) {
       Alert.alert('Erro', 'Não foi possível reproduzir a música.');
+      console.log('Audio error:', e);
     }
   }
 
@@ -168,6 +173,7 @@ function useAudioPlayer() {
     }
   }
 
+  // Limpa o som ao desmontar o hook
   useEffect(() => {
     return () => {
       if (soundRef.current) soundRef.current.unloadAsync();
@@ -177,20 +183,28 @@ function useAudioPlayer() {
   return { play, pause, isPlaying, playingId };
 }
 
-// ---------------------- TELA: MENU ----------------------
+// -------------------------------------------------------------------
+// TELA: MENU — com seções "Músicas brasileiras" (ids 5 e 8) e
+// "Músicas gringas" (ids 4 e 9). ScrollView sem "rebote" no iPhone.
+// -------------------------------------------------------------------
 function MenuScreen() {
+  const insets = useSafeAreaInsets(); // se quiser usar insets.top em padding
+
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: '#0b0f14' }}>
       <ScrollView
-        contentContainerStyle={[styles.screen, { flexGrow: 1, paddingBottom: 24 }]}
-        bounces={false}
+        contentContainerStyle={[
+          styles.screen,
+          { flexGrow: 1, paddingBottom: 24 + insets.bottom },
+        ]}
+        bounces={false} // remove "elástico" no iPhone
       >
         <Text style={styles.title}>SpotiFei</Text>
         <Text style={styles.subtitle}>
           App player: música para todas as pessoas
         </Text>
 
-        {/* MÚSICAS BRASILEIRAS */}
+        {/* 🎵 MÚSICAS BRASILEIRAS (ids 5 e 8) */}
         <Text style={[styles.title, { fontSize: 18, marginTop: 20 }]}>
           Músicas brasileiras
         </Text>
@@ -204,7 +218,7 @@ function MenuScreen() {
           ))}
         </View>
 
-        {/* MÚSICAS GRINGAS */}
+        {/* 🌎 MÚSICAS GRINGAS (ids 4 e 9) */}
         <Text style={[styles.title, { fontSize: 18, marginTop: 20 }]}>
           Músicas gringas
         </Text>
@@ -222,17 +236,22 @@ function MenuScreen() {
   );
 }
 
-
-// ---------------------- TELA: BUSCAR ----------------------
+// -------------------------------------------------------------------
+// TELA: BUSCAR — trocamos FlatList por ScrollView para evitar "pulo"
+// no iPhone com listas curtas. Sem rebote + flexGrow.
+// -------------------------------------------------------------------
 function BuscarScreen() {
+  const insets = useSafeAreaInsets();
   const [query, setQuery] = useState('');
   const [liked, setLiked] = useState([]);
   const { play, pause, isPlaying, playingId } = useAudioPlayer();
 
+  // Carrega curtidas uma vez (ao montar)
   useEffect(() => {
     loadLiked().then(setLiked);
   }, []);
 
+  // Filtro simples em memória (conteúdo da disciplina)
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return MUSICAS;
@@ -243,6 +262,7 @@ function BuscarScreen() {
     );
   }, [query]);
 
+  // Curtir/Descurtir música
   async function toggleLike(id) {
     const exists = liked.includes(id);
     const next = exists ? liked.filter((x) => x !== id) : [...liked, id];
@@ -253,9 +273,12 @@ function BuscarScreen() {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: '#0b0f14' }}>
-      {/* ⬇️ ScrollView com flexGrow e bounces={false} */}
+      {/* ScrollView resolve bem o comportamento do iPhone em listas curtas */}
       <ScrollView
-        contentContainerStyle={[styles.screen, { flexGrow: 1, paddingBottom: 24 }]}
+        contentContainerStyle={[
+          styles.screen,
+          { flexGrow: 1, paddingBottom: 24 + insets.bottom },
+        ]}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator
         bounces={false}
@@ -306,13 +329,20 @@ function BuscarScreen() {
   );
 }
 
-// ---------------------- TELA: BIBLIOTECA ----------------------
+// -------------------------------------------------------------------
+// TELA: FAVORITAS (Biblioteca)
+// Dica: para evitar "pulo" constante, o ideal é recarregar quando
+// a aba ganha foco. Aqui mantemos simples (carrega a cada 1500 ms),
+// mas você pode trocar por useIsFocused() se preferir.
+// -------------------------------------------------------------------
 function BibliotecaScreen() {
+  const insets = useSafeAreaInsets();
   const [liked, setLiked] = useState([]);
   const { play, pause, isPlaying, playingId } = useAudioPlayer();
 
+  // Recarrega periodicamente (leve). Alternativa: useIsFocused para recarregar só ao focar.
   useEffect(() => {
-    const timer = setInterval(() => loadLiked().then(setLiked), 800);
+    const timer = setInterval(() => loadLiked().then(setLiked), 1500);
     return () => clearInterval(timer);
   }, []);
 
@@ -321,7 +351,10 @@ function BibliotecaScreen() {
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: '#0b0f14' }}>
       <ScrollView
-        contentContainerStyle={[styles.screen, { flexGrow: 1 }]}
+        contentContainerStyle={[
+          styles.screen,
+          { flexGrow: 1, paddingBottom: 24 + insets.bottom },
+        ]}
         bounces={false}
       >
         <Text style={styles.title}>Favoritas</Text>
@@ -354,15 +387,18 @@ function BibliotecaScreen() {
   );
 }
 
-// ---------------------- TELA: CRIAR PLAYLIST ----------------------
+// -------------------------------------------------------------------
+// TELA: CRIAR PLAYLIST — com correções de rolagem (iPhone) e foco
+// -------------------------------------------------------------------
 function CriarPlaylistScreen() {
   const insets = useSafeAreaInsets();
-  const isFocused = useIsFocused();
+  const isFocused = useIsFocused(); // recarrega listas quando a aba fica visível
 
   const [nome, setNome] = useState('');
   const [playlists, setPlaylists] = useState([]);
   const [selected, setSelected] = useState({});
 
+  // Recarrega playlists somente quando a aba está ativa (evita re-render loop)
   useEffect(() => {
     if (isFocused) {
       loadPlaylists().then(setPlaylists);
@@ -384,6 +420,7 @@ function CriarPlaylistScreen() {
         'https://img.freepik.com/vetores-premium/maquete-de-disco-de-vinil-realista-na-capa-do-album-de-musica-em-branco-vazio-isolada-no-fundo-branco-retro-musical-long-play-em-caixa-de-papel-modelo-branco-ilustracao-vetorial-3d_341509-1731.jpg?w=360',
       musicIds,
     };
+
     const next = [nova, ...playlists];
     setPlaylists(next);
     await savePlaylists(next);
@@ -411,11 +448,7 @@ function CriarPlaylistScreen() {
       `Tem certeza que deseja excluir "${alvo?.nome}"?`,
       [
         { text: 'Cancelar', style: 'cancel' },
-        {
-          text: 'Excluir',
-          style: 'destructive',
-          onPress: () => excluirPlaylist(playlistId),
-        },
+        { text: 'Excluir', style: 'destructive', onPress: () => excluirPlaylist(playlistId) },
       ]
     );
   }
@@ -432,6 +465,7 @@ function CriarPlaylistScreen() {
         bounces={false}
       >
         <Text style={styles.title}>Criar Playlist</Text>
+
         <TextInput
           placeholder="Nome da playlist"
           placeholderTextColor="#8ea0b5"
@@ -440,6 +474,7 @@ function CriarPlaylistScreen() {
           style={styles.input}
         />
 
+        {/* Lista de músicas para selecionar (checklist simples por toque) */}
         {MUSICAS.map((m) => {
           const on = !!selected[m.id];
           return (
@@ -491,15 +526,24 @@ function CriarPlaylistScreen() {
   );
 }
 
-// ---------------------- NAVEGAÇÃO ----------------------
+// -------------------------------------------------------------------
+// NAVEGAÇÃO (Bottom Tabs)
+// -------------------------------------------------------------------
 const Tab = createBottomTabNavigator();
 
 export default function App() {
+  // Configura o modo de áudio uma única vez (Promise aguardada corretamente)
   useEffect(() => {
-    Audio.setAudioModeAsync({
-      playsInSilentModeIOS: true,
-      staysActiveInBackground: false,
-    });
+    (async () => {
+      try {
+        await Audio.setAudioModeAsync({
+          playsInSilentModeIOS: true,
+          staysActiveInBackground: false,
+        });
+      } catch (e) {
+        console.log('Erro ao configurar o modo de áudio:', e);
+      }
+    })();
   }, []);
 
   return (
@@ -514,17 +558,26 @@ export default function App() {
   );
 }
 
-// ---------------------- ESTILOS ----------------------
+// -------------------------------------------------------------------
+// ESTILOS (cores/dimensões consistentes + rolagem segura)
+// -------------------------------------------------------------------
 const styles = StyleSheet.create({
+  // Base de todas as telas dentro de ScrollView
   screen: {
+    // flexGrow garante que o conteúdo ocupe a altura inteira da viewport;
+    // isso evita o "rebote" que puxa a tela de volta no iPhone.
     flexGrow: 1,
     backgroundColor: '#0b0f14',
     paddingHorizontal: 16,
-    paddingTop: 12,
+    paddingTop: 12, // com SafeAreaView já respeitamos o topo
   },
+
+  // textos
   title: { color: '#fff', fontSize: 22, fontWeight: '700', marginBottom: 10 },
   subtitle: { color: '#c9d1d9', fontSize: 14 },
   muted: { color: '#8ea0b5', fontSize: 12 },
+
+  // input
   input: {
     backgroundColor: '#121923',
     borderColor: '#223045',
@@ -535,7 +588,10 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     marginBottom: 12,
   },
+
+  // linhas/cards
   row: { flexDirection: 'row', alignItems: 'center', paddingVertical: 8 },
+
   selectRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -547,12 +603,18 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   selectRowOn: { backgroundColor: '#132640', borderColor: '#3a5c8a' },
+
+  // imagens
   cover: { width: 56, height: 56, borderRadius: 8 },
   coverSmall: { width: 44, height: 44, borderRadius: 8 },
   playlistImg: { width: 52, height: 52, borderRadius: 10 },
   cardImg: { width: '100%', height: 100, borderRadius: 12, marginBottom: 8 },
+
+  // textos de músicas
   songTitle: { color: '#fff', fontSize: 14, fontWeight: '600' },
   songArtist: { color: '#a5b3c2', fontSize: 12 },
+
+  // botões
   playBtn: {
     backgroundColor: '#1db954',
     paddingHorizontal: 10,
@@ -561,6 +623,7 @@ const styles = StyleSheet.create({
     marginLeft: 8,
   },
   playText: { color: '#0b0f14', fontWeight: '700' },
+
   primaryBtn: {
     backgroundColor: '#1db954',
     paddingVertical: 12,
@@ -569,6 +632,8 @@ const styles = StyleSheet.create({
     marginTop: 10,
   },
   primaryText: { color: '#0b0f14', fontWeight: '800', fontSize: 16 },
+
+  // tags/ações
   tag: {
     borderColor: '#2e3d56',
     borderWidth: 1,
@@ -580,6 +645,8 @@ const styles = StyleSheet.create({
   tagOn: { backgroundColor: '#1db95422', borderColor: '#1db954' },
   tagText: { color: '#c9d1d9', fontWeight: '700' },
   tagTextOn: { color: '#1db954' },
+
+  // cards do menu
   cardsRow: { flexDirection: 'row', gap: 12, marginTop: 16, flexWrap: 'wrap' },
   card: {
     width: '47%',
@@ -592,6 +659,8 @@ const styles = StyleSheet.create({
   },
   cardTitle: { color: '#fff', fontWeight: '700' },
   cardArtist: { color: '#a5b3c2', fontSize: 12 },
+
+  // cards de playlist
   playlistCard: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -602,6 +671,8 @@ const styles = StyleSheet.create({
     padding: 10,
     marginTop: 8,
   },
+
+  // botão de excluir (playlist)
   dangerBtn: {
     backgroundColor: '#2a0f13',
     borderColor: '#7a1f2a',
