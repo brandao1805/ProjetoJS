@@ -1,21 +1,16 @@
 import * as React from 'react';
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { View, Text, TextInput, TouchableOpacity, Image, StyleSheet, Alert, Vibration, ScrollView, } from 'react-native';
-
-// Safe area para respeitar notch/relógio/status bar (iOS e Android)
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-
-// Navegação: NavigationContainer (default export) e useIsFocused (named)
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { NavigationContainer } from '@react-navigation/native';
-import { useIsFocused } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-
+import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Audio } from 'expo-av';
 
-// -------------------------------------------------------------------
-// MOCK DE DADOS (capas por URL; áudios locais via require())
-// -------------------------------------------------------------------
+// -------------------------------------------------------------
+//  DADOS (mock com áudios locais via require)
+// -------------------------------------------------------------
 const MUSICAS = [
   {
     id: '1',
@@ -31,6 +26,7 @@ const MUSICAS = [
       'DJ Boy, Kako, Mc Joaozinho VT, Mc Don Juan, Mc Tuto, Mc V7, Mc Vine7, Mc Pê Leal',
     capaUrl:
       'https://cdn-images.dzcdn.net/images/cover/7b8424d36d8d2566a4bc408c1965e4c5/500x500-000000-80-0-0.jpg',
+    audioModule: require('./assets/track2.mp3'),
   },
   {
     id: '3',
@@ -38,6 +34,7 @@ const MUSICAS = [
     artista: 'Matuê, WIU, Teto',
     capaUrl:
       'https://cdn-images.dzcdn.net/images/cover/c960508dc43237db89609c0b7211987e/500x500.jpg',
+    audioModule: require('./assets/track3.mp3'),
   },
   {
     id: '4',
@@ -45,6 +42,7 @@ const MUSICAS = [
     artista: 'Gucci Mane, Bruno Mars, Kodak Black',
     capaUrl:
       'https://cdn-images.dzcdn.net/images/cover/93c37fa9c4aa86f5edac9fd0a3ab7b00/500x500-000000-80-0-0.jpg',
+    audioModule: require('./assets/WakeUpInTheSky.mp3'),
   },
   {
     id: '5',
@@ -52,6 +50,7 @@ const MUSICAS = [
     artista: 'Racionais MCs',
     capaUrl:
       'https://cdn-images.dzcdn.net/images/cover/e04b68c5a1aa7a29128d05e7ff9e3084/500x500.jpg',
+    audioModule: require('./assets/1PorAmor2PorDinheiro.mp3'),
   },
   {
     id: '6',
@@ -59,6 +58,7 @@ const MUSICAS = [
     artista: 'Snoop Dogg ft. Pharrell Williams',
     capaUrl:
       'https://cdn-images.dzcdn.net/images/cover/eea35658898e296aa8b5d817827e6aaf/500x500-000000-80-0-0.jpg',
+    audioModule: require('./assets/Beautiful.mp3'),
   },
   {
     id: '7',
@@ -66,6 +66,7 @@ const MUSICAS = [
     artista: 'Travis Scott',
     capaUrl:
       'https://cdn-images.dzcdn.net/images/cover/7df7ac6028591a5622f24cf32a555510/500x500-000000-80-0-0.jpg',
+    audioModule: require('./assets/YOSEMITE.mp3'),
   },
   {
     id: '8',
@@ -73,6 +74,7 @@ const MUSICAS = [
     artista: 'Natiruts',
     capaUrl:
       'https://cdn-images.dzcdn.net/images/cover/29427c053a8d0175221738d1546b5335/500x500-000000-80-0-0.jpg',
+    audioModule: require('./assets/QueroSerFelizTambem.mp3'),
   },
   {
     id: '9',
@@ -80,6 +82,7 @@ const MUSICAS = [
     artista: 'Lil Baby',
     capaUrl:
       'https://cdn-images.dzcdn.net/images/cover/3d845a35fd7849630324107baf07657b/500x500-000000-80-0-0.jpg',
+    audioModule: require('./assets/DripTooHard.mp3'),
   },
   {
     id: '10',
@@ -87,6 +90,7 @@ const MUSICAS = [
     artista: 'MC GP',
     capaUrl:
       'https://cdn-images.dzcdn.net/images/cover/bfe4031a9d5c5ff196aa67b8cdac0cf3/500x500-000000-80-0-0.jpg',
+    audioModule: require('./assets/ModoEsquece.mp3'),
   },
   {
     id: '11',
@@ -94,6 +98,7 @@ const MUSICAS = [
     artista: 'Queen',
     capaUrl:
       'https://cdn-images.dzcdn.net/images/cover/8b8fc5d117f9357b79f0a0a410a170e8/500x500-000000-80-0-0.jpg',
+    audioModule: require('./assets/SomebodyToLove.mp3'),
   },
   {
     id: '12',
@@ -101,15 +106,21 @@ const MUSICAS = [
     artista: 'Matuê, WIU, Teto',
     capaUrl:
       'https://cdn-images.dzcdn.net/images/cover/6a607b99dfcb2dcd32f787ed0e11bf41/500x500-000000-80-0-0.jpg',
+    audioModule: require('./assets/FlowEspacial.mp3'),
   },
 ];
 
+// Alturas aproximadas (funciona bem em iOS/Android)
+const TABBAR_HEIGHT = 64;      // altura da Bottom Tab
+const CONTROL_HEIGHT = 56;     // altura da barra do player
+const CONTROL_MARGIN = 20;      // espaço entre a barra e a tab
+const SAFE_SCROLL_BOTTOM = TABBAR_HEIGHT + CONTROL_HEIGHT + 24; // padding p/ ScrollView
 const KEY_LIKED = '@liked_songs';
 const KEY_PLAYLISTS = '@playlists';
 
-// -------------------------------------------------------------------
-// AsyncStorage helpers (salva/recupera curtidas e playlists)
-// -------------------------------------------------------------------
+// -------------------------------------------------------------
+//  AsyncStorage helpers
+// -------------------------------------------------------------
 async function loadLiked() {
   const raw = await AsyncStorage.getItem(KEY_LIKED);
   return raw ? JSON.parse(raw) : [];
@@ -125,15 +136,14 @@ async function savePlaylists(arr) {
   await AsyncStorage.setItem(KEY_PLAYLISTS, JSON.stringify(arr));
 }
 
-// -------------------------------------------------------------------
-// Hook de Player local (expo-av) — toca um som por vez
-// -------------------------------------------------------------------
+// -------------------------------------------------------------
+//  Hook do player (expo-av) — 1 som por vez
+// -------------------------------------------------------------
 function useAudioPlayer() {
-  const soundRef = useRef(null); // guarda a instância do som atual
+  const soundRef = useRef(null);
   const [playingId, setPlayingId] = useState(null);
   const [isPlaying, setIsPlaying] = useState(false);
 
-  // Para o som corrente (se houver) e libera memória
   async function stopCurrent() {
     if (soundRef.current) {
       try {
@@ -144,19 +154,16 @@ function useAudioPlayer() {
     }
   }
 
-  // Toca/pausa a faixa informada
   async function play(track) {
-    // Se já é a mesma música e está tocando → vira pause
+    if (!track) return;
+    // se já é a mesma música e está tocando → pause
     if (playingId === track.id && isPlaying) {
       await pause();
       return;
     }
     await stopCurrent();
-
     try {
-      const { sound } = await Audio.Sound.createAsync(track.audioModule, {
-        shouldPlay: true, // já inicia tocando
-      });
+      const { sound } = await Audio.Sound.createAsync(track.audioModule, { shouldPlay: true });
       soundRef.current = sound;
       setPlayingId(track.id);
       setIsPlaying(true);
@@ -173,7 +180,6 @@ function useAudioPlayer() {
     }
   }
 
-  // Limpa o som ao desmontar o hook
   useEffect(() => {
     return () => {
       if (soundRef.current) soundRef.current.unloadAsync();
@@ -183,31 +189,53 @@ function useAudioPlayer() {
   return { play, pause, isPlaying, playingId };
 }
 
-// -------------------------------------------------------------------
-// TELA: MENU — com seções "Músicas brasileiras" (ids 5 e 8) e
-// "Músicas gringas" (ids 4 e 9). ScrollView sem "rebote" no iPhone.
-// -------------------------------------------------------------------
-function MenuScreen() {
-  const insets = useSafeAreaInsets(); // se quiser usar insets.top em padding
+// -------------------------------------------------------------
+//  NowPlayingBar — controle global (prev / play-pause / next)
+// -------------------------------------------------------------
+function NowPlayingBar({ queue, index, setIndex, player }) {
+  if (!queue.length) return null;
+
+  const current = queue[index];
+  const isThisPlaying = player.playingId === current?.id && player.isPlaying;
+
+  function playAt(i) {
+    if (!queue.length) return;
+    const norm = ((i % queue.length) + queue.length) % queue.length; // normaliza
+    setIndex(norm);
+    player.play(queue[norm]);
+  }
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: '#0b0f14' }}>
-      <ScrollView
-        contentContainerStyle={[
-          styles.screen,
-          { flexGrow: 1, paddingBottom: 24 + insets.bottom },
-        ]}
-        bounces={false} // remove "elástico" no iPhone
-      >
-        <Text style={styles.title}>SpotiFei</Text>
-        <Text style={styles.subtitle}>
-          App player: música para todas as pessoas
-        </Text>
+    <View style={styles.controlBar}>
+      <TouchableOpacity onPress={() => playAt(index - 1)}>
+        <Text style={styles.controlSideIcon}>◀◀</Text>
+      </TouchableOpacity>
 
-        {/* 🎵 MÚSICAS BRASILEIRAS (ids 5 e 8) */}
-        <Text style={[styles.title, { fontSize: 18, marginTop: 20 }]}>
-          Músicas brasileiras
-        </Text>
+      <TouchableOpacity
+        onPress={() => (isThisPlaying ? player.pause() : playAt(index))}
+        style={styles.controlCenterBtn}
+      >
+        <Text style={styles.controlCenterIcon}>{isThisPlaying ? '❚❚' : '▶'}</Text>
+      </TouchableOpacity>
+
+      <TouchableOpacity onPress={() => playAt(index + 1)}>
+        <Text style={styles.controlSideIcon}>▶▶</Text>
+      </TouchableOpacity>
+    </View>
+  );
+}
+
+// -------------------------------------------------------------
+//  TELAS
+// -------------------------------------------------------------
+function MenuScreen() {
+  return (
+    <SafeAreaView style={{ flex: 1, backgroundColor: '#0b0f14' }}>
+      <ScrollView contentContainerStyle={[styles.screen, { flexGrow: 1, paddingBottom: SAFE_SCROLL_BOTTOM }]} bounces={false}>
+        <Text style={styles.title}>SpotiFei</Text>
+        <Text style={styles.subtitle}>App player: música para todas as pessoas</Text>
+
+        <Text style={[styles.title, { fontSize: 18, marginTop: 20 }]}>Músicas Brasileiras</Text>
         <View style={styles.cardsRow}>
           {MUSICAS.filter((m) => m.id === '5' || m.id === '8').map((m) => (
             <View key={m.id} style={styles.card}>
@@ -218,12 +246,20 @@ function MenuScreen() {
           ))}
         </View>
 
-        {/* 🌎 MÚSICAS GRINGAS (ids 4 e 9) */}
-        <Text style={[styles.title, { fontSize: 18, marginTop: 20 }]}>
-          Músicas gringas
-        </Text>
+        <Text style={[styles.title, { fontSize: 18, marginTop: 20 }]}>Músicas Gringas</Text>
         <View style={styles.cardsRow}>
           {MUSICAS.filter((m) => m.id === '4' || m.id === '9').map((m) => (
+            <View key={m.id} style={styles.card}>
+              <Image source={{ uri: m.capaUrl }} style={styles.cardImg} />
+              <Text style={styles.cardTitle}>{m.titulo}</Text>
+              <Text style={styles.cardArtist}>{m.artista}</Text>
+            </View>
+          ))}
+        </View>
+
+        <Text style={[styles.title, { fontSize: 18, marginTop: 20 }]}>Em Alta</Text>
+        <View style={styles.cardsRow}>
+          {MUSICAS.filter((m) => m.id === '2' || m.id === '10').map((m) => (
             <View key={m.id} style={styles.card}>
               <Image source={{ uri: m.capaUrl }} style={styles.cardImg} />
               <Text style={styles.cardTitle}>{m.titulo}</Text>
@@ -236,33 +272,22 @@ function MenuScreen() {
   );
 }
 
-// -------------------------------------------------------------------
-// TELA: BUSCAR — trocamos FlatList por ScrollView para evitar "pulo"
-// no iPhone com listas curtas. Sem rebote + flexGrow.
-// -------------------------------------------------------------------
-function BuscarScreen() {
-  const insets = useSafeAreaInsets();
+function BuscarScreen({ player, setQueue, setIndex }) {
   const [query, setQuery] = useState('');
   const [liked, setLiked] = useState([]);
-  const { play, pause, isPlaying, playingId } = useAudioPlayer();
 
-  // Carrega curtidas uma vez (ao montar)
   useEffect(() => {
     loadLiked().then(setLiked);
   }, []);
 
-  // Filtro simples em memória (conteúdo da disciplina)
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return MUSICAS;
     return MUSICAS.filter(
-      (m) =>
-        m.titulo.toLowerCase().includes(q) ||
-        m.artista.toLowerCase().includes(q)
+      (m) => m.titulo.toLowerCase().includes(q) || m.artista.toLowerCase().includes(q)
     );
   }, [query]);
 
-  // Curtir/Descurtir música
   async function toggleLike(id) {
     const exists = liked.includes(id);
     const next = exists ? liked.filter((x) => x !== id) : [...liked, id];
@@ -273,18 +298,12 @@ function BuscarScreen() {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: '#0b0f14' }}>
-      {/* ScrollView resolve bem o comportamento do iPhone em listas curtas */}
       <ScrollView
-        contentContainerStyle={[
-          styles.screen,
-          { flexGrow: 1, paddingBottom: 24 + insets.bottom },
-        ]}
+        contentContainerStyle={[styles.screen, { flexGrow: 1, paddingBottom: SAFE_SCROLL_BOTTOM }]}
         keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator
         bounces={false}
       >
         <Text style={styles.title}>Buscar</Text>
-
         <TextInput
           placeholder="Digite o nome da música..."
           placeholderTextColor="#8ea0b5"
@@ -295,7 +314,7 @@ function BuscarScreen() {
 
         {filtered.map((item) => {
           const likedThis = liked.includes(item.id);
-          const isThisPlaying = playingId === item.id && isPlaying;
+          const isThisPlaying = player.playingId === item.id && player.isPlaying;
           return (
             <View key={item.id} style={styles.row}>
               <Image source={{ uri: item.capaUrl }} style={styles.cover} />
@@ -314,12 +333,14 @@ function BuscarScreen() {
               </TouchableOpacity>
 
               <TouchableOpacity
-                onPress={() => (isThisPlaying ? pause() : play(item))}
+                onPress={() => {
+                  setQueue([item]); // define fila de 1 música
+                  setIndex(0);
+                  isThisPlaying ? player.pause() : player.play(item);
+                }}
                 style={styles.playBtn}
               >
-                <Text style={styles.playText}>
-                  {isThisPlaying ? 'Pause' : 'Play'}
-                </Text>
+                <Text style={styles.playText}>{isThisPlaying ? '❚❚' : '▶'}</Text>
               </TouchableOpacity>
             </View>
           );
@@ -328,21 +349,12 @@ function BuscarScreen() {
     </SafeAreaView>
   );
 }
-
-// -------------------------------------------------------------------
-// TELA: FAVORITAS (Biblioteca)
-// Dica: para evitar "pulo" constante, o ideal é recarregar quando
-// a aba ganha foco. Aqui mantemos simples (carrega a cada 1500 ms),
-// mas você pode trocar por useIsFocused() se preferir.
-// -------------------------------------------------------------------
-function BibliotecaScreen() {
-  const insets = useSafeAreaInsets();
+ // TELA BIBLIOTECA
+function BibliotecaScreen({ player, setQueue, setIndex }) {
   const [liked, setLiked] = useState([]);
-  const { play, pause, isPlaying, playingId } = useAudioPlayer();
 
-  // Recarrega periodicamente (leve). Alternativa: useIsFocused para recarregar só ao focar.
   useEffect(() => {
-    const timer = setInterval(() => loadLiked().then(setLiked), 1500);
+    const timer = setInterval(() => loadLiked().then(setLiked), 1200);
     return () => clearInterval(timer);
   }, []);
 
@@ -350,19 +362,13 @@ function BibliotecaScreen() {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: '#0b0f14' }}>
-      <ScrollView
-        contentContainerStyle={[
-          styles.screen,
-          { flexGrow: 1, paddingBottom: 24 + insets.bottom },
-        ]}
-        bounces={false}
-      >
-        <Text style={styles.title}>Favoritas</Text>
+      <ScrollView contentContainerStyle={[styles.screen, { flexGrow: 1, paddingBottom: SAFE_SCROLL_BOTTOM }]} bounces={false}>
+        <Text style={styles.title}>Favoritas ({likedSongs.length})</Text>
         {likedSongs.length === 0 ? (
           <Text style={styles.subtitle}>Nenhuma música curtida.</Text>
         ) : (
           likedSongs.map((item) => {
-            const isThisPlaying = playingId === item.id && isPlaying;
+            const isThisPlaying = player.playingId === item.id && player.isPlaying;
             return (
               <View key={item.id} style={styles.row}>
                 <Image source={{ uri: item.capaUrl }} style={styles.cover} />
@@ -371,12 +377,14 @@ function BibliotecaScreen() {
                   <Text style={styles.songArtist}>{item.artista}</Text>
                 </View>
                 <TouchableOpacity
-                  onPress={() => (isThisPlaying ? pause() : play(item))}
+                  onPress={() => {
+                    setQueue([item]);
+                    setIndex(0);
+                    isThisPlaying ? player.pause() : player.play(item);
+                  }}
                   style={styles.playBtn}
                 >
-                  <Text style={styles.playText}>
-                    {isThisPlaying ? 'Pause' : 'Play'}
-                  </Text>
+                  <Text style={styles.playText}>{isThisPlaying ? '❚❚' : '▶'}</Text>
                 </TouchableOpacity>
               </View>
             );
@@ -387,31 +395,19 @@ function BibliotecaScreen() {
   );
 }
 
-// -------------------------------------------------------------------
-// TELA: CRIAR PLAYLIST — com correções de rolagem (iPhone) e foco
-// -------------------------------------------------------------------
+// TELA CRIAR PLAYLIST
 function CriarPlaylistScreen() {
-  const insets = useSafeAreaInsets();
-  const isFocused = useIsFocused(); // recarrega listas quando a aba fica visível
-
   const [nome, setNome] = useState('');
   const [playlists, setPlaylists] = useState([]);
   const [selected, setSelected] = useState({});
 
-  // Recarrega playlists somente quando a aba está ativa (evita re-render loop)
   useEffect(() => {
-    if (isFocused) {
-      loadPlaylists().then(setPlaylists);
-    }
-  }, [isFocused]);
+    loadPlaylists().then(setPlaylists);
+  }, []);
 
   async function criar() {
     const n = nome.trim();
-    if (!n) {
-      Alert.alert('Atenção', 'Informe um nome para a playlist.');
-      return;
-    }
-
+    if (!n) return Alert.alert('Atenção', 'Informe um nome.');
     const musicIds = Object.keys(selected).filter((id) => selected[id]);
     const nova = {
       id: String(Date.now()),
@@ -420,7 +416,6 @@ function CriarPlaylistScreen() {
         'https://img.freepik.com/vetores-premium/maquete-de-disco-de-vinil-realista-na-capa-do-album-de-musica-em-branco-vazio-isolada-no-fundo-branco-retro-musical-long-play-em-caixa-de-papel-modelo-branco-ilustracao-vetorial-3d_341509-1731.jpg?w=360',
       musicIds,
     };
-
     const next = [nova, ...playlists];
     setPlaylists(next);
     await savePlaylists(next);
@@ -434,38 +429,10 @@ function CriarPlaylistScreen() {
     setSelected((p) => ({ ...p, [id]: !p[id] }));
   }
 
-  async function excluirPlaylist(playlistId) {
-    const next = playlists.filter((p) => p.id !== playlistId);
-    setPlaylists(next);
-    await savePlaylists(next);
-    Vibration.vibrate(30);
-  }
-
-  function confirmarExclusao(playlistId) {
-    const alvo = playlists.find((p) => p.id === playlistId);
-    Alert.alert(
-      'Excluir playlist',
-      `Tem certeza que deseja excluir "${alvo?.nome}"?`,
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        { text: 'Excluir', style: 'destructive', onPress: () => excluirPlaylist(playlistId) },
-      ]
-    );
-  }
-
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: '#0b0f14' }}>
-      <ScrollView
-        contentContainerStyle={[
-          styles.screen,
-          { paddingBottom: 24 + insets.bottom, flexGrow: 1 },
-        ]}
-        keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator
-        bounces={false}
-      >
+      <ScrollView contentContainerStyle={[styles.screen, { flexGrow: 1, paddingBottom: SAFE_SCROLL_BOTTOM }]} bounces={false}>
         <Text style={styles.title}>Criar Playlist</Text>
-
         <TextInput
           placeholder="Nome da playlist"
           placeholderTextColor="#8ea0b5"
@@ -474,7 +441,6 @@ function CriarPlaylistScreen() {
           style={styles.input}
         />
 
-        {/* Lista de músicas para selecionar (checklist simples por toque) */}
         {MUSICAS.map((m) => {
           const on = !!selected[m.id];
           return (
@@ -488,9 +454,7 @@ function CriarPlaylistScreen() {
                 <Text style={styles.songTitle}>{m.titulo}</Text>
                 <Text style={styles.songArtist}>{m.artista}</Text>
               </View>
-              <Text style={[styles.tagText, on && styles.tagTextOn]}>
-                {on ? '✓' : '+'}
-              </Text>
+              <Text style={[styles.tagText, on && styles.tagTextOn]}>{on ? '✓' : '+'}</Text>
             </TouchableOpacity>
           );
         })}
@@ -498,11 +462,102 @@ function CriarPlaylistScreen() {
         <TouchableOpacity onPress={criar} style={styles.primaryBtn}>
           <Text style={styles.primaryText}>Criar Playlist</Text>
         </TouchableOpacity>
+      </ScrollView>
+    </SafeAreaView>
+  );
+}
 
-        <Text style={[styles.subtitle, { marginTop: 20 }]}>Minhas playlists:</Text>
+// --------- Minhas Playlists (Stack: lista → detalhes) ----------
+const Stack = createNativeStackNavigator();
 
+function PlaylistDetalhes({ route, player, setQueue, setIndex }) {
+  const { playlist } = route.params;
+  const songs = MUSICAS.filter((m) => playlist.musicIds.includes(m.id));
+  const [currentIndex, setCurrentIndex] = useState(0);
+
+  // ao abrir: define a fila global como a playlist
+  useEffect(() => {
+    if (songs.length) {
+      setQueue(songs);
+      setIndex(0);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [playlist?.id]);
+
+  // mantém índice local sincronizado com o player
+  useEffect(() => {
+    if (!player.playingId) return;
+    const idx = songs.findIndex((m) => m.id === player.playingId);
+    if (idx >= 0) setCurrentIndex(idx);
+  }, [player.playingId]);
+
+  function playAt(i) {
+    if (!songs.length) return;
+    const norm = ((i % songs.length) + songs.length) % songs.length;
+    setCurrentIndex(norm);
+    setIndex(norm);
+    player.play(songs[norm]);
+  }
+
+  return (
+    <SafeAreaView style={{ flex: 1, backgroundColor: '#0b0f14' }}>
+      <ScrollView contentContainerStyle={[styles.screen, { flexGrow: 1, paddingBottom: SAFE_SCROLL_BOTTOM }]} bounces={false}>
+        <Text style={styles.title}>Playlist: {playlist.nome}</Text>
+
+        {songs.length === 0 ? (
+          <Text style={styles.subtitle}>Nenhuma música nessa playlist.</Text>
+        ) : (
+          songs.map((item, idx) => {
+            const isThisPlaying = player.playingId === item.id && player.isPlaying;
+            return (
+              <View key={item.id} style={styles.row}>
+                <Image source={{ uri: item.capaUrl }} style={styles.cover} />
+                <View style={{ flex: 1, marginLeft: 12 }}>
+                  <Text style={styles.songTitle}>
+                    {item.titulo} {idx === currentIndex ? '▶' : ''}
+                  </Text> //indicador de musica reproduzida no momento
+                  <Text style={styles.songArtist}>{item.artista}</Text>
+                </View>
+                <TouchableOpacity
+                  onPress={() => {
+                    setQueue(songs);
+                    setIndex(idx);
+                    isThisPlaying ? player.pause() : playAt(idx);
+                  }}
+                  style={styles.playBtn}
+                >
+                  <Text style={styles.playText}>{isThisPlaying ? '❚❚' : '▶'}</Text>
+                </TouchableOpacity>
+              </View>
+            );
+          })
+        )}
+      </ScrollView>
+    </SafeAreaView>
+  );
+}
+
+function MinhasPlaylistsScreen({ navigation, player, setQueue, setIndex }) {
+  const [playlists, setPlaylists] = useState([]);
+
+  useEffect(() => {
+    const timer = setInterval(() => loadPlaylists().then(setPlaylists), 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  async function excluirPlaylist(id) {
+    const next = playlists.filter((p) => p.id !== id);
+    setPlaylists(next);
+    await savePlaylists(next);
+    Vibration.vibrate(30);
+  }
+
+  return (
+    <SafeAreaView style={{ flex: 1, backgroundColor: '#0b0f14' }}>
+      <ScrollView contentContainerStyle={[styles.screen, { flexGrow: 1, paddingBottom: SAFE_SCROLL_BOTTOM }]} bounces={false}>
+        <Text style={styles.title}>Minhas Playlists</Text>
         {playlists.length === 0 ? (
-          <Text style={styles.muted}>Nenhuma playlist criada ainda.</Text>
+          <Text style={styles.subtitle}>Nenhuma playlist criada ainda.</Text>
         ) : (
           playlists.map((p) => (
             <View key={p.id} style={styles.playlistCard}>
@@ -511,13 +566,17 @@ function CriarPlaylistScreen() {
                 <Text style={styles.cardTitle}>{p.nome}</Text>
                 <Text style={styles.muted}>{p.musicIds.length} música(s)</Text>
               </View>
-
-              <TouchableOpacity
-                onPress={() => confirmarExclusao(p.id)}
-                style={styles.dangerBtn}
-              >
-                <Text style={styles.dangerText}>Excluir</Text>
-              </TouchableOpacity>
+              <View style={{ flexDirection: 'row' }}>
+                <TouchableOpacity
+                  onPress={() => navigation.navigate('Playlist', { playlist: p })}
+                  style={[styles.editBtn, { marginRight: 8 }]}
+                >
+                  <Text style={styles.editText}>Abrir</Text>
+                </TouchableOpacity>
+                <TouchableOpacity onPress={() => excluirPlaylist(p.id)} style={styles.dangerBtn}>
+                  <Text style={styles.dangerText}>Excluir</Text>
+                </TouchableOpacity>
+              </View>
             </View>
           ))
         )}
@@ -526,13 +585,44 @@ function CriarPlaylistScreen() {
   );
 }
 
-// -------------------------------------------------------------------
-// NAVEGAÇÃO (Bottom Tabs)
-// -------------------------------------------------------------------
+function PlaylistsStack({ player, setQueue, setIndex }) {
+  return (
+    <Stack.Navigator screenOptions={{ headerShown: false }}>
+      <Stack.Screen name="ListaPlaylists">
+        {(props) => (
+          <MinhasPlaylistsScreen
+            {...props}
+            player={player}
+            setQueue={setQueue}
+            setIndex={setIndex}
+          />
+        )}
+      </Stack.Screen>
+      <Stack.Screen name="Playlist">
+        {(props) => (
+          <PlaylistDetalhes
+            {...props}
+            player={player}
+            setQueue={setQueue}
+            setIndex={setIndex}
+          />
+        )}
+      </Stack.Screen>
+    </Stack.Navigator>
+  );
+}
+
+// -------------------------------------------------------------
+//  Navegação principal (Tabs) + barra global
+// -------------------------------------------------------------
 const Tab = createBottomTabNavigator();
 
 export default function App() {
-  // Configura o modo de áudio uma única vez (Promise aguardada corretamente)
+  // player único e estado global da fila
+  const player = useAudioPlayer();
+  const [queue, setQueue] = useState([]); // array de músicas
+  const [index, setIndex] = useState(0);  // posição atual
+
   useEffect(() => {
     (async () => {
       try {
@@ -541,43 +631,49 @@ export default function App() {
           staysActiveInBackground: false,
         });
       } catch (e) {
-        console.log('Erro ao configurar o modo de áudio:', e);
+        console.log('Erro ao configurar áudio:', e);
       }
     })();
   }, []);
 
   return (
-    <NavigationContainer>
-      <Tab.Navigator screenOptions={{ headerShown: false }}>
-        <Tab.Screen name="Menu" component={MenuScreen} />
-        <Tab.Screen name="Buscar" component={BuscarScreen} />
-        <Tab.Screen name="Favoritas" component={BibliotecaScreen} />
-        <Tab.Screen name="Criar Playlist" component={CriarPlaylistScreen} />
-      </Tab.Navigator>
-    </NavigationContainer>
+    <View style={{ flex: 1, backgroundColor: '#0b0f14' }}>
+      <NavigationContainer>
+        <Tab.Navigator screenOptions={{ headerShown: false }}>
+          <Tab.Screen name="Menu" component={MenuScreen} />
+          <Tab.Screen name="Buscar">
+            {() => <BuscarScreen player={player} setQueue={setQueue} setIndex={setIndex} />}
+          </Tab.Screen>
+          <Tab.Screen name="Favoritas">
+            {() => <BibliotecaScreen player={player} setQueue={setQueue} setIndex={setIndex} />}
+          </Tab.Screen>
+          <Tab.Screen name="Criar Playlist" component={CriarPlaylistScreen} />
+          <Tab.Screen name="Minhas Playlists">
+            {() => <PlaylistsStack player={player} setQueue={setQueue} setIndex={setIndex} />}
+          </Tab.Screen>
+        </Tab.Navigator>
+      </NavigationContainer>
+
+      {/* Barra global fixa (prev/play/next) */}
+      <NowPlayingBar queue={queue} index={index} setIndex={setIndex} player={player} />
+    </View>
   );
 }
 
-// -------------------------------------------------------------------
-// ESTILOS (cores/dimensões consistentes + rolagem segura)
-// -------------------------------------------------------------------
+// -------------------------------------------------------------
+//  ESTILOS
+// -------------------------------------------------------------
 const styles = StyleSheet.create({
-  // Base de todas as telas dentro de ScrollView
   screen: {
-    // flexGrow garante que o conteúdo ocupe a altura inteira da viewport;
-    // isso evita o "rebote" que puxa a tela de volta no iPhone.
     flexGrow: 1,
     backgroundColor: '#0b0f14',
     paddingHorizontal: 16,
-    paddingTop: 12, // com SafeAreaView já respeitamos o topo
+    paddingTop: 12,
   },
-
-  // textos
   title: { color: '#fff', fontSize: 22, fontWeight: '700', marginBottom: 10 },
   subtitle: { color: '#c9d1d9', fontSize: 14 },
   muted: { color: '#8ea0b5', fontSize: 12 },
 
-  // input
   input: {
     backgroundColor: '#121923',
     borderColor: '#223045',
@@ -589,7 +685,6 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
 
-  // linhas/cards
   row: { flexDirection: 'row', alignItems: 'center', paddingVertical: 8 },
 
   selectRow: {
@@ -604,17 +699,14 @@ const styles = StyleSheet.create({
   },
   selectRowOn: { backgroundColor: '#132640', borderColor: '#3a5c8a' },
 
-  // imagens
   cover: { width: 56, height: 56, borderRadius: 8 },
   coverSmall: { width: 44, height: 44, borderRadius: 8 },
   playlistImg: { width: 52, height: 52, borderRadius: 10 },
   cardImg: { width: '100%', height: 100, borderRadius: 12, marginBottom: 8 },
 
-  // textos de músicas
   songTitle: { color: '#fff', fontSize: 14, fontWeight: '600' },
   songArtist: { color: '#a5b3c2', fontSize: 12 },
 
-  // botões
   playBtn: {
     backgroundColor: '#1db954',
     paddingHorizontal: 10,
@@ -633,7 +725,6 @@ const styles = StyleSheet.create({
   },
   primaryText: { color: '#0b0f14', fontWeight: '800', fontSize: 16 },
 
-  // tags/ações
   tag: {
     borderColor: '#2e3d56',
     borderWidth: 1,
@@ -646,7 +737,6 @@ const styles = StyleSheet.create({
   tagText: { color: '#c9d1d9', fontWeight: '700' },
   tagTextOn: { color: '#1db954' },
 
-  // cards do menu
   cardsRow: { flexDirection: 'row', gap: 12, marginTop: 16, flexWrap: 'wrap' },
   card: {
     width: '47%',
@@ -660,7 +750,6 @@ const styles = StyleSheet.create({
   cardTitle: { color: '#fff', fontWeight: '700' },
   cardArtist: { color: '#a5b3c2', fontSize: 12 },
 
-  // cards de playlist
   playlistCard: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -671,8 +760,16 @@ const styles = StyleSheet.create({
     padding: 10,
     marginTop: 8,
   },
+  editBtn: {
+    backgroundColor: '#13301f',
+    borderColor: '#1db95455',
+    borderWidth: 1,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: 10,
+  },
+  editText: { color: '#1db954', fontWeight: '700' },
 
-  // botão de excluir (playlist)
   dangerBtn: {
     backgroundColor: '#2a0f13',
     borderColor: '#7a1f2a',
@@ -682,4 +779,54 @@ const styles = StyleSheet.create({
     borderRadius: 10,
   },
   dangerText: { color: '#ff6b81', fontWeight: '700' },
+
+  // --- Barra de controle global ---
+  // --- Barra de controle global (menor e acima da Tab) ---
+  controlBar: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    // fica ACIMA da tab bar
+    bottom: TABBAR_HEIGHT + CONTROL_MARGIN,
+
+    height: CONTROL_HEIGHT,
+    backgroundColor: '#121923',
+    borderWidth: 1,
+    borderColor: '#223045',
+    borderRadius: 0,
+    paddingHorizontal: 16,
+
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+
+    // sombra leve
+    shadowColor: '#000',
+    shadowOpacity: 0.2,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 6,
+  },
+
+  controlSideIcon: {
+    color: '#fff',
+    fontSize: 22,     // ↓ menor
+    fontWeight: '700',
+  },
+
+  controlCenterBtn: {
+    width: 44,        // ↓ menor
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#fff',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  controlCenterIcon: {
+    color: '#0b0f14',
+    fontSize: 20,     // ↓ menor
+    fontWeight: '800',
+  },
+
 });
