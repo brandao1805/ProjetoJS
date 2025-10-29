@@ -110,6 +110,10 @@ const MUSICAS = [
   },
 ];
 
+// Barra sempre ativa
+const ALWAYS_ON = true; // 👈 manter a barra ativa mesmo sem música
+
+
 // Alturas aproximadas (funciona bem em iOS/Android)
 const TABBAR_HEIGHT = 64;      // altura da Bottom Tab
 const CONTROL_HEIGHT = 56;     // altura da barra do player
@@ -117,6 +121,7 @@ const CONTROL_MARGIN = 20;      // espaço entre a barra e a tab
 const SAFE_SCROLL_BOTTOM = TABBAR_HEIGHT + CONTROL_HEIGHT + 24; // padding p/ ScrollView
 const KEY_LIKED = '@liked_songs';
 const KEY_PLAYLISTS = '@playlists';
+
 
 // -------------------------------------------------------------
 //  AsyncStorage helpers
@@ -211,12 +216,14 @@ function NowPlayingBar({ queue, index, setIndex, player }) {
         <Text style={styles.controlSideIcon}>◀◀</Text>
       </TouchableOpacity>
 
-      <TouchableOpacity
-        onPress={() => (isThisPlaying ? player.pause() : playAt(index))}
+      <View style={{ alignItems: 'center', justifyContent: 'center' }}>
+        <TouchableOpacity
+        onPress={() => (isThisPlaying ? player.pause() : playAt(hasQueue ? index : 0))}
         style={styles.controlCenterBtn}
       >
         <Text style={styles.controlCenterIcon}>{isThisPlaying ? '❚❚' : '▶'}</Text>
       </TouchableOpacity>
+    </View>
 
       <TouchableOpacity onPress={() => playAt(index + 1)}>
         <Text style={styles.controlSideIcon}>▶▶</Text>
@@ -639,6 +646,13 @@ export default function App() {
       }
     })();
   }, []);
+  // garante que a fila exista desde o início
+  useEffect(() => {
+    if (queue.length === 0) {
+      setQueue(MUSICAS);  // fila inicial com todas as músicas
+      setIndex(0);        // começa da primeira
+    }
+  }, []);
 
   return (
     <View style={{ flex: 1, backgroundColor: '#0b0f14' }}>
@@ -719,15 +733,6 @@ const styles = StyleSheet.create({
     marginLeft: 8,
   },
   playText: { color: '#0b0f14', fontWeight: '700' },
-
-  primaryBtn: {
-    backgroundColor: '#1db954',
-    paddingVertical: 12,
-    borderRadius: 14,
-    alignItems: 'center',
-    marginTop: 10,
-  },
-  primaryText: { color: '#0b0f14', fontWeight: '800', fontSize: 16 },
 
   tag: {
     borderColor: '#2e3d56',
