@@ -1,7 +1,9 @@
 import * as React from 'react';
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { View, Text, TextInput, TouchableOpacity, Image, StyleSheet, Alert, Vibration, ScrollView, } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useNavigation, useRoute } from '@react-navigation/native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
@@ -110,10 +112,6 @@ const MUSICAS = [
   },
 ];
 
-// Barra sempre ativa
-const ALWAYS_ON = true; // 👈 manter a barra ativa mesmo sem música
-
-
 // Alturas aproximadas (funciona bem em iOS/Android)
 const TABBAR_HEIGHT = 64;      // altura da Bottom Tab
 const CONTROL_HEIGHT = 56;     // altura da barra do player
@@ -198,39 +196,72 @@ function useAudioPlayer() {
 //  NowPlayingBar — controle global (prev / play-pause / next)
 // -------------------------------------------------------------
 function NowPlayingBar({ queue, index, setIndex, player }) {
-  if (!queue.length) return null;
-
-  const current = queue[index];
+  const hasQueue = queue && queue.length > 0;
+  const current = hasQueue ? queue[index] : MUSICAS[0];
   const isThisPlaying = player.playingId === current?.id && player.isPlaying;
 
   function playAt(i) {
-    if (!queue.length) return;
-    const norm = ((i % queue.length) + queue.length) % queue.length; // normaliza
+    if (!hasQueue) {
+      setIndex(0);
+      player.play(MUSICAS[0]);
+      return;
+    }
+    const norm = ((i % queue.length) + queue.length) % queue.length;
     setIndex(norm);
     player.play(queue[norm]);
   }
 
   return (
     <View style={styles.controlBar}>
-      <TouchableOpacity onPress={() => playAt(index - 1)}>
-        <Text style={styles.controlSideIcon}>◀◀</Text>
-      </TouchableOpacity>
+      {/* Topo: mini capa + textos */}
+      <View style={styles.nowTopRow}>
+        {!!current?.capaUrl && (
+          <Image source={{ uri: current.capaUrl }} style={styles.nowThumb} />
+        )}
+        <View style={{ flex: 1, marginLeft: 8 }}>
+          <Text style={styles.nowTitle} numberOfLines={1}>
+            {current?.titulo ?? 'Pronto para tocar'}
+          </Text>
+          <Text style={styles.nowArtist} numberOfLines={1}>
+            {current?.artista ?? ''}
+          </Text>
+        </View>
+      </View>
 
-      <View style={{ alignItems: 'center', justifyContent: 'center' }}>
+      {/* Base: prev / play-pause / next */}
+      <View style={styles.nowControls}>
         <TouchableOpacity
-        onPress={() => (isThisPlaying ? player.pause() : playAt(hasQueue ? index : 0))}
-        style={styles.controlCenterBtn}
-      >
-        <Text style={styles.controlCenterIcon}>{isThisPlaying ? '❚❚' : '▶'}</Text>
-      </TouchableOpacity>
-    </View>
+          onPress={() => playAt((hasQueue ? index : 0) - 1)}
+          disabled={!hasQueue}
+          style={{ opacity: hasQueue ? 1 : 0.4 }}
+        >
+          <Ionicons name="play-skip-back" size={22} color="#fff" />
+        </TouchableOpacity>
 
-      <TouchableOpacity onPress={() => playAt(index + 1)}>
-        <Text style={styles.controlSideIcon}>▶▶</Text>
-      </TouchableOpacity>
+        <TouchableOpacity
+          onPress={() => (isThisPlaying ? player.pause() : playAt(hasQueue ? index : 0))}
+          style={styles.controlCenterBtn}
+        >
+          <Ionicons
+            name={isThisPlaying ? 'pause' : 'play'}
+            size={20}
+            color="#0b0f14"
+          />
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          onPress={() => playAt((hasQueue ? index : 0) + 1)}
+          disabled={!hasQueue}
+          style={{ opacity: hasQueue ? 1 : 0.4 }}
+        >
+          <Ionicons name="play-skip-forward" size={22} color="#fff" />
+        </TouchableOpacity>
+      </View>
     </View>
   );
 }
+
+
 
 // -------------------------------------------------------------
 //  TELAS
@@ -334,9 +365,7 @@ function BuscarScreen({ player, setQueue, setIndex }) {
                 onPress={() => toggleLike(item.id)}
                 style={[styles.tag, likedThis && styles.tagOn]}
               >
-                <Text style={[styles.tagText, likedThis && styles.tagTextOn]}>
-                  {likedThis ? '♥' : '♡'}
-                </Text>
+                <Ionicons name={likedThis ? 'heart' : 'heart-outline'} size={18} color={likedThis ? '#1db954' : '#c9d1d9'} />
               </TouchableOpacity>
 
               <TouchableOpacity
@@ -795,21 +824,16 @@ const styles = StyleSheet.create({
     position: 'absolute',
     left: 0,
     right: 0,
-    // fica ACIMA da tab bar
-    bottom: TABBAR_HEIGHT + CONTROL_MARGIN,
-
-    height: CONTROL_HEIGHT,
+    bottom: TABBAR_HEIGHT + CONTROL_MARGIN, // fica acima da Tab
     backgroundColor: '#121923',
     borderWidth: 1,
     borderColor: '#223045',
+    paddingHorizontal: 12,
+    paddingTop: 8,            // espaço p/ a linha do título
+    paddingBottom: 10,        // espaço p/ os botões
     borderRadius: 0,
-    paddingHorizontal: 16,
 
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-
-    // sombra leve
+    // eleva um pouco
     shadowColor: '#000',
     shadowOpacity: 0.2,
     shadowRadius: 6,
@@ -817,23 +841,52 @@ const styles = StyleSheet.create({
     elevation: 6,
   },
 
-  controlSideIcon: {
-    color: '#fff',
-    fontSize: 22,     // ↓ menor
-    fontWeight: '700',
+  // linha do topo: mini capa + textos
+  nowTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 6, // separa do grupo de botões
   },
 
+  nowThumb: {
+    width: 28,
+    height: 28,
+    borderRadius: 4,
+    backgroundColor: '#0b0f14',
+  },
+
+  nowTitle: {
+    color: '#ffffff',
+    fontSize: 13,     // título um pouco maior
+    fontWeight: '800',
+  },
+
+  nowArtist: {
+    color: '#9fb0c6',
+    fontSize: 11,     // menor que o título
+    fontWeight: '600',
+  },
+
+  // linha de botões (base)
+  nowControls: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+
+
   controlCenterBtn: {
-    width: 44,        // ↓ menor
-    height: 44,
-    borderRadius: 22,
+    width: 42,
+    height: 42,
+    borderRadius: 21,
     backgroundColor: '#fff',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  fab: {
+
+  fab: { //botão criar
   position: 'absolute',
-  bottom: SAFE_SCROLL_BOTTOM - 70, // acima da barra global
+  bottom: SAFE_SCROLL_BOTTOM - 30, // acima da barra global
   right: 20,
   backgroundColor: '#1db954',
   width: 60,
@@ -845,12 +898,7 @@ const styles = StyleSheet.create({
   shadowOpacity: 0.3,
   shadowRadius: 6,
   elevation: 8,
-},
-fabText: { color: '#0b0f14', fontSize: 30, fontWeight: '900' },
-  controlCenterIcon: {
-    color: '#0b0f14',
-    fontSize: 20,     // ↓ menor
-    fontWeight: '800',
   },
+  fabText: { color: '#0b0f14', fontSize: 30, fontWeight: '900' }, // botao criar
 
 });
