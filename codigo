@@ -1,17 +1,16 @@
 import * as React from 'react';
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useRef, useMemo, useContext } from 'react';
 import { View, Text, TextInput, TouchableOpacity, Image, StyleSheet, Alert, Vibration, ScrollView, } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { useNavigation, useRoute } from '@react-navigation/native';
-import { NavigationContainer } from '@react-navigation/native';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { NavigationContainer, useNavigationContainerRef, useIsFocused, } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Audio } from 'expo-av';
 
 // -------------------------------------------------------------
-//  DADOS (mock com áudios locais via require)
+//  DADOS
 // -------------------------------------------------------------
 const MUSICAS = [
   {
@@ -112,17 +111,13 @@ const MUSICAS = [
   },
 ];
 
-// Alturas aproximadas (funciona bem em iOS/Android)
-const TABBAR_HEIGHT = 64;      // altura da Bottom Tab
-const CONTROL_HEIGHT = 56;     // altura da barra do player
-const CONTROL_MARGIN = 20;      // espaço entre a barra e a tab
-const SAFE_SCROLL_BOTTOM = TABBAR_HEIGHT + CONTROL_HEIGHT + 24; // padding p/ ScrollView
+const TABBAR_HEIGHT = 64;
+const CONTROL_MARGIN = 20;
 const KEY_LIKED = '@liked_songs';
 const KEY_PLAYLISTS = '@playlists';
 
-
 // -------------------------------------------------------------
-//  AsyncStorage helpers
+// AsyncStorage helpers
 // -------------------------------------------------------------
 async function loadLiked() {
   const raw = await AsyncStorage.getItem(KEY_LIKED);
@@ -140,8 +135,10 @@ async function savePlaylists(arr) {
 }
 
 // -------------------------------------------------------------
-//  Hook do player (expo-av) — 1 som por vez
+// Player Context
 // -------------------------------------------------------------
+const PlayerContext = React.createContext(null);
+
 function useAudioPlayer() {
   const soundRef = useRef(null);
   const [playingId, setPlayingId] = useState(null);
@@ -159,14 +156,15 @@ function useAudioPlayer() {
 
   async function play(track) {
     if (!track) return;
-    // se já é a mesma música e está tocando → pause
     if (playingId === track.id && isPlaying) {
       await pause();
       return;
     }
     await stopCurrent();
     try {
-      const { sound } = await Audio.Sound.createAsync(track.audioModule, { shouldPlay: true });
+      const { sound } = await Audio.Sound.createAsync(track.audioModule, {
+        shouldPlay: true,
+      });
       soundRef.current = sound;
       setPlayingId(track.id);
       setIsPlaying(true);
@@ -192,88 +190,127 @@ function useAudioPlayer() {
   return { play, pause, isPlaying, playingId };
 }
 
+function PlayerProvider({ children }) {
+  const player = useAudioPlayer();
+  const [queue, setQueue] = useState([]);
+  const [index, setIndex] = useState(0);
+
+  // carrega uma fila inicial
+  useEffect(() => {
+    setQueue([MUSICAS[0]]);
+    setIndex(0);
+  }, []);
+
+  const value = {
+    player,
+    queue,
+    setQueue,
+    index,
+    setIndex,
+  };
+
+  return (
+    <PlayerContext.Provider value={value}>{children}</PlayerContext.Provider>
+  );
+}
+
+function usePlayerCtx() {
+  const ctx = useContext(PlayerContext);
+  if (!ctx) {
+    throw new Error('usePlayerCtx precisa estar dentro do PlayerProvider');
+  }
+  return ctx;
+}
+
 // -------------------------------------------------------------
-//  NowPlayingBar — controle global (prev / play-pause / next)
+// Barra global (usa contexto)
 // -------------------------------------------------------------
-function NowPlayingBar({ queue, index, setIndex, player }) {
-  const hasQueue = queue && queue.length > 0;
-  const current = hasQueue ? queue[index] : MUSICAS[0];
-  const isThisPlaying = player.playingId === current?.id && player.isPlaying;
+function NowPlayingBar({ navigationRef }) {
+  const { player, queue, index, setIndex } = usePlayerCtx();
+
+  if (!queue.length) return null;
+
+  const current = queue[index];
+  const isThisPlaying =
+    current && player.playingId === current.id && player.isPlaying;
+
+  function goToFull() {
+    if (navigationRef?.current) {
+      navigationRef.current.navigate('PlayerFull');
+    }
+  }
 
   function playAt(i) {
-    if (!hasQueue) {
-      setIndex(0);
-      player.play(MUSICAS[0]);
-      return;
-    }
+    if (!queue.length) return;
     const norm = ((i % queue.length) + queue.length) % queue.length;
     setIndex(norm);
     player.play(queue[norm]);
   }
 
   return (
-    <View style={styles.controlBar}>
-      {/* Topo: mini capa + textos */}
-      <View style={styles.nowTopRow}>
-        {!!current?.capaUrl && (
-          <Image source={{ uri: current.capaUrl }} style={styles.nowThumb} />
-        )}
-        <View style={{ flex: 1, marginLeft: 8 }}>
-          <Text style={styles.nowTitle} numberOfLines={1}>
-            {current?.titulo ?? 'Pronto para tocar'}
-          </Text>
-          <Text style={styles.nowArtist} numberOfLines={1}>
-            {current?.artista ?? ''}
-          </Text>
+    <View pointerEvents="auto">
+      <TouchableOpacity
+        activeOpacity={0.9}
+        onPress={goToFull}
+        style={styles.controlBar}
+      >
+        <View style={styles.nowTopRow}>
+          {current?.capaUrl ? (
+            <Image source={{ uri: current.capaUrl }} style={styles.nowThumb} />
+          ) : (
+            <View style={styles.nowThumb} />
+          )}
+
+          <View style={{ marginLeft: 8, flex: 1 }}>
+            <Text numberOfLines={1} style={styles.nowTitle}>
+              {current?.titulo}
+            </Text>
+            <Text numberOfLines={1} style={styles.nowArtist}>
+              {current?.artista}
+            </Text>
+          </View>
         </View>
-      </View>
 
-      {/* Base: prev / play-pause / next */}
-      <View style={styles.nowControls}>
-        <TouchableOpacity
-          onPress={() => playAt((hasQueue ? index : 0) - 1)}
-          disabled={!hasQueue}
-          style={{ opacity: hasQueue ? 1 : 0.4 }}
-        >
-          <Ionicons name="play-skip-back" size={22} color="#fff" />
-        </TouchableOpacity>
+        <View style={styles.nowControls}>
+          <TouchableOpacity onPress={() => playAt(index - 1)}>
+            <Ionicons name="play-skip-back" size={30} color="#fff" />
+          </TouchableOpacity>
 
-        <TouchableOpacity
-          onPress={() => (isThisPlaying ? player.pause() : playAt(hasQueue ? index : 0))}
-          style={styles.controlCenterBtn}
-        >
-          <Ionicons
-            name={isThisPlaying ? 'pause' : 'play'}
-            size={20}
-            color="#0b0f14"
-          />
-        </TouchableOpacity>
+          <TouchableOpacity
+            onPress={() => (isThisPlaying ? player.pause() : playAt(index))}
+            style={styles.controlCenterBtn}
+          >
+            <Ionicons
+              name={isThisPlaying ? 'pause' : 'play'}
+              size={25}
+              color="#0b0f14"
+            />
+          </TouchableOpacity>
 
-        <TouchableOpacity
-          onPress={() => playAt((hasQueue ? index : 0) + 1)}
-          disabled={!hasQueue}
-          style={{ opacity: hasQueue ? 1 : 0.4 }}
-        >
-          <Ionicons name="play-skip-forward" size={22} color="#fff" />
-        </TouchableOpacity>
-      </View>
+          <TouchableOpacity onPress={() => playAt(index + 1)}>
+            <Ionicons name="play-skip-forward" size={30} color="#fff" />
+          </TouchableOpacity>
+        </View>
+      </TouchableOpacity>
     </View>
   );
 }
 
-
-
 // -------------------------------------------------------------
-//  TELAS
+// TELAS (todas pegam do contexto, não recebem props)
 // -------------------------------------------------------------
 function MenuScreen() {
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: '#0b0f14' }}>
-      <ScrollView contentContainerStyle={[styles.screen, { flexGrow: 1, paddingBottom: SAFE_SCROLL_BOTTOM }]} bounces={false}>
+    <SafeAreaView style={styles.safe}>
+      <ScrollView contentContainerStyle={styles.scrollContent} bounces={false}>
         <Text style={styles.title}>SpotiFei</Text>
-        <Text style={styles.subtitle}>App player: música para todas as pessoas</Text>
+        <Text style={styles.subtitle}>
+          App player: música para todas as pessoas
+        </Text>
 
-        <Text style={[styles.title, { fontSize: 18, marginTop: 20 }]}>Músicas Brasileiras</Text>
+        <Text style={[styles.title, { fontSize: 18, marginTop: 20 }]}>
+          Músicas Brasileiras
+        </Text>
         <View style={styles.cardsRow}>
           {MUSICAS.filter((m) => m.id === '5' || m.id === '8').map((m) => (
             <View key={m.id} style={styles.card}>
@@ -284,7 +321,9 @@ function MenuScreen() {
           ))}
         </View>
 
-        <Text style={[styles.title, { fontSize: 18, marginTop: 20 }]}>Músicas Gringas</Text>
+        <Text style={[styles.title, { fontSize: 18, marginTop: 20 }]}>
+          Músicas Gringas
+        </Text>
         <View style={styles.cardsRow}>
           {MUSICAS.filter((m) => m.id === '4' || m.id === '9').map((m) => (
             <View key={m.id} style={styles.card}>
@@ -295,7 +334,9 @@ function MenuScreen() {
           ))}
         </View>
 
-        <Text style={[styles.title, { fontSize: 18, marginTop: 20 }]}>Em Alta</Text>
+        <Text style={[styles.title, { fontSize: 18, marginTop: 20 }]}>
+          Em Alta
+        </Text>
         <View style={styles.cardsRow}>
           {MUSICAS.filter((m) => m.id === '2' || m.id === '10').map((m) => (
             <View key={m.id} style={styles.card}>
@@ -310,7 +351,8 @@ function MenuScreen() {
   );
 }
 
-function BuscarScreen({ player, setQueue, setIndex }) {
+function BuscarScreen() {
+  const { player, setQueue, setIndex } = usePlayerCtx();
   const [query, setQuery] = useState('');
   const [liked, setLiked] = useState([]);
 
@@ -322,7 +364,9 @@ function BuscarScreen({ player, setQueue, setIndex }) {
     const q = query.trim().toLowerCase();
     if (!q) return MUSICAS;
     return MUSICAS.filter(
-      (m) => m.titulo.toLowerCase().includes(q) || m.artista.toLowerCase().includes(q)
+      (m) =>
+        m.titulo.toLowerCase().includes(q) ||
+        m.artista.toLowerCase().includes(q)
     );
   }, [query]);
 
@@ -335,9 +379,9 @@ function BuscarScreen({ player, setQueue, setIndex }) {
   }
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: '#0b0f14' }}>
+    <SafeAreaView style={styles.safe}>
       <ScrollView
-        contentContainerStyle={[styles.screen, { flexGrow: 1, paddingBottom: SAFE_SCROLL_BOTTOM }]}
+        contentContainerStyle={styles.scrollContent}
         keyboardShouldPersistTaps="handled"
         bounces={false}
       >
@@ -352,7 +396,8 @@ function BuscarScreen({ player, setQueue, setIndex }) {
 
         {filtered.map((item) => {
           const likedThis = liked.includes(item.id);
-          const isThisPlaying = player.playingId === item.id && player.isPlaying;
+          const isThisPlaying =
+            player.playingId === item.id && player.isPlaying;
           return (
             <View key={item.id} style={styles.row}>
               <Image source={{ uri: item.capaUrl }} style={styles.cover} />
@@ -365,18 +410,24 @@ function BuscarScreen({ player, setQueue, setIndex }) {
                 onPress={() => toggleLike(item.id)}
                 style={[styles.tag, likedThis && styles.tagOn]}
               >
-                <Ionicons name={likedThis ? 'heart' : 'heart-outline'} size={18} color={likedThis ? '#1db954' : '#c9d1d9'} />
+                <Ionicons
+                  name={likedThis ? 'heart' : 'heart-outline'}
+                  size={18}
+                  color={likedThis ? '#1db954' : '#c9d1d9'}
+                />
               </TouchableOpacity>
 
               <TouchableOpacity
                 onPress={() => {
-                  setQueue([item]); // define fila de 1 música
+                  setQueue([item]);
                   setIndex(0);
                   isThisPlaying ? player.pause() : player.play(item);
                 }}
                 style={styles.playBtn}
               >
-                <Text style={styles.playText}>{isThisPlaying ? '❚❚' : '▶'}</Text>
+                <Text style={styles.playText}>
+                  {isThisPlaying ? '❚❚' : '▶'}
+                </Text>
               </TouchableOpacity>
             </View>
           );
@@ -385,26 +436,31 @@ function BuscarScreen({ player, setQueue, setIndex }) {
     </SafeAreaView>
   );
 }
- // TELA BIBLIOTECA
-function BibliotecaScreen({ player, setQueue, setIndex }) {
-  const [liked, setLiked] = useState([]);
 
+function BibliotecaScreen() {
+  const { player, setQueue, setIndex } = usePlayerCtx();
+  const [liked, setLiked] = useState([]);
+  const isFocused = useIsFocused(); // 👈 saber se a aba Favoritas está visível
+
+  // toda vez que a aba ganhar foco, ler de novo do AsyncStorage
   useEffect(() => {
-    const timer = setInterval(() => loadLiked().then(setLiked), 1200);
-    return () => clearInterval(timer);
-  }, []);
+    if (isFocused) {
+      loadLiked().then(setLiked);
+    }
+  }, [isFocused]);
 
   const likedSongs = MUSICAS.filter((m) => liked.includes(m.id));
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: '#0b0f14' }}>
-      <ScrollView contentContainerStyle={[styles.screen, { flexGrow: 1, paddingBottom: SAFE_SCROLL_BOTTOM }]} bounces={false}>
+    <SafeAreaView style={styles.safe}>
+      <ScrollView contentContainerStyle={styles.scrollContent} bounces={false}>
         <Text style={styles.title}>Favoritas ({likedSongs.length})</Text>
         {likedSongs.length === 0 ? (
           <Text style={styles.subtitle}>Nenhuma música curtida.</Text>
         ) : (
           likedSongs.map((item) => {
-            const isThisPlaying = player.playingId === item.id && player.isPlaying;
+            const isThisPlaying =
+              player.playingId === item.id && player.isPlaying;
             return (
               <View key={item.id} style={styles.row}>
                 <Image source={{ uri: item.capaUrl }} style={styles.cover} />
@@ -420,7 +476,9 @@ function BibliotecaScreen({ player, setQueue, setIndex }) {
                   }}
                   style={styles.playBtn}
                 >
-                  <Text style={styles.playText}>{isThisPlaying ? '❚❚' : '▶'}</Text>
+                  <Text style={styles.playText}>
+                    {isThisPlaying ? '❚❚' : '▶'}
+                  </Text>
                 </TouchableOpacity>
               </View>
             );
@@ -431,7 +489,7 @@ function BibliotecaScreen({ player, setQueue, setIndex }) {
   );
 }
 
-// TELA CRIAR PLAYLIST
+
 function CriarPlaylistScreen() {
   const [nome, setNome] = useState('');
   const [playlists, setPlaylists] = useState([]);
@@ -466,20 +524,20 @@ function CriarPlaylistScreen() {
   }
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: '#0b0f14' }}>
-  <ScrollView
-    contentContainerStyle={[styles.screen, { flexGrow: 1, paddingBottom: SAFE_SCROLL_BOTTOM }]}
-    bounces={false}
-  >
-    <Text style={styles.title}>Criar Playlist</Text>
+    <SafeAreaView style={styles.safe}>
+      <ScrollView
+        contentContainerStyle={styles.scrollContentWithFab}
+        bounces={false}
+      >
+        <Text style={styles.title}>Criar Playlist</Text>
 
-    <TextInput
-      placeholder="Nome da playlist"
-      placeholderTextColor="#8ea0b5"
-      value={nome}
-      onChangeText={setNome}
-      style={styles.input}
-    />
+        <TextInput
+          placeholder="Nome da playlist"
+          placeholderTextColor="#8ea0b5"
+          value={nome}
+          onChangeText={setNome}
+          style={styles.input}
+        />
 
         {MUSICAS.map((m) => {
           const on = !!selected[m.id];
@@ -494,12 +552,14 @@ function CriarPlaylistScreen() {
                 <Text style={styles.songTitle}>{m.titulo}</Text>
                 <Text style={styles.songArtist}>{m.artista}</Text>
               </View>
-              <Text style={[styles.tagText, on && styles.tagTextOn]}>{on ? '✓' : '+'}</Text>
+              <Text style={[styles.tagText, on && styles.tagTextOn]}>
+                {on ? '✓' : '+'}
+              </Text>
             </TouchableOpacity>
           );
         })}
       </ScrollView>
-      // criar playlist +
+
       <TouchableOpacity onPress={criar} style={styles.fab}>
         <Text style={styles.fabText}>＋</Text>
       </TouchableOpacity>
@@ -507,66 +567,66 @@ function CriarPlaylistScreen() {
   );
 }
 
-// --------- Minhas Playlists (Stack: lista → detalhes) ----------
-const Stack = createNativeStackNavigator();
+// ---------- Playlists (Stack) ----------
+const InnerStack = createNativeStackNavigator();
 
-function PlaylistDetalhes({ route, player, setQueue, setIndex }) {
-  const { playlist } = route.params;
+function PlaylistDetalhes({ route }) {
+  const { player, setQueue, setIndex } = usePlayerCtx();
+  const playlist = route?.params?.playlist;
+
+  if (!playlist) {
+    return (
+      <SafeAreaView style={styles.safeCenter}>
+        <Text style={{ color: '#fff' }}>Playlist não encontrada.</Text>
+      </SafeAreaView>
+    );
+  }
+
   const songs = MUSICAS.filter((m) => playlist.musicIds.includes(m.id));
   const [currentIndex, setCurrentIndex] = useState(0);
 
-  // ao abrir: define a fila global como a playlist
-  useEffect(() => {
-    if (songs.length) {
-      setQueue(songs);
-      setIndex(0);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [playlist?.id]);
-
-  // mantém índice local sincronizado com o player
-  useEffect(() => {
-    if (!player.playingId) return;
-    const idx = songs.findIndex((m) => m.id === player.playingId);
-    if (idx >= 0) setCurrentIndex(idx);
-  }, [player.playingId]);
-
-  function playAt(i) {
+  function playAt(idx) {
     if (!songs.length) return;
-    const norm = ((i % songs.length) + songs.length) % songs.length;
+    const norm = ((idx % songs.length) + songs.length) % songs.length;
     setCurrentIndex(norm);
+    setQueue(songs);
     setIndex(norm);
     player.play(songs[norm]);
   }
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: '#0b0f14' }}>
-      <ScrollView contentContainerStyle={[styles.screen, { flexGrow: 1, paddingBottom: SAFE_SCROLL_BOTTOM }]} bounces={false}>
+    <SafeAreaView style={styles.safe}>
+      <ScrollView contentContainerStyle={styles.scrollContent} bounces={false}>
         <Text style={styles.title}>Playlist: {playlist.nome}</Text>
 
         {songs.length === 0 ? (
           <Text style={styles.subtitle}>Nenhuma música nessa playlist.</Text>
         ) : (
           songs.map((item, idx) => {
-            const isThisPlaying = player.playingId === item.id && player.isPlaying;
+            const isThisPlaying =
+              player.playingId === item.id && player.isPlaying;
             return (
               <View key={item.id} style={styles.row}>
                 <Image source={{ uri: item.capaUrl }} style={styles.cover} />
                 <View style={{ flex: 1, marginLeft: 12 }}>
                   <Text style={styles.songTitle}>
                     {item.titulo} {idx === currentIndex ? '▶' : ''}
-                  </Text> //indicador de musica reproduzida no momento
+                  </Text>
                   <Text style={styles.songArtist}>{item.artista}</Text>
                 </View>
                 <TouchableOpacity
                   onPress={() => {
-                    setQueue(songs);
-                    setIndex(idx);
-                    isThisPlaying ? player.pause() : playAt(idx);
+                    if (isThisPlaying) {
+                      player.pause();
+                    } else {
+                      playAt(idx);
+                    }
                   }}
                   style={styles.playBtn}
                 >
-                  <Text style={styles.playText}>{isThisPlaying ? '❚❚' : '▶'}</Text>
+                  <Text style={styles.playText}>
+                    {isThisPlaying ? '❚❚' : '▶'}
+                  </Text>
                 </TouchableOpacity>
               </View>
             );
@@ -577,13 +637,16 @@ function PlaylistDetalhes({ route, player, setQueue, setIndex }) {
   );
 }
 
-function MinhasPlaylistsScreen({ navigation, player, setQueue, setIndex }) {
+function MinhasPlaylistsScreen({ navigation }) {
   const [playlists, setPlaylists] = useState([]);
+  const isFocused = useIsFocused(); // 👈 descobre se essa tela está visível
 
+  // carrega ao montar E toda vez que voltar pra essa tela
   useEffect(() => {
-    const timer = setInterval(() => loadPlaylists().then(setPlaylists), 1000);
-    return () => clearInterval(timer);
-  }, []);
+    if (isFocused) {
+      loadPlaylists().then(setPlaylists);
+    }
+  }, [isFocused]);
 
   async function excluirPlaylist(id) {
     const next = playlists.filter((p) => p.id !== id);
@@ -593,8 +656,8 @@ function MinhasPlaylistsScreen({ navigation, player, setQueue, setIndex }) {
   }
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: '#0b0f14' }}>
-      <ScrollView contentContainerStyle={[styles.screen, { flexGrow: 1, paddingBottom: SAFE_SCROLL_BOTTOM }]} bounces={false}>
+    <SafeAreaView style={styles.safe}>
+      <ScrollView contentContainerStyle={styles.scrollContent} bounces={false}>
         <Text style={styles.title}>Minhas Playlists</Text>
         {playlists.length === 0 ? (
           <Text style={styles.subtitle}>Nenhuma playlist criada ainda.</Text>
@@ -613,7 +676,10 @@ function MinhasPlaylistsScreen({ navigation, player, setQueue, setIndex }) {
                 >
                   <Text style={styles.editText}>Abrir</Text>
                 </TouchableOpacity>
-                <TouchableOpacity onPress={() => excluirPlaylist(p.id)} style={styles.dangerBtn}>
+                <TouchableOpacity
+                  onPress={() => excluirPlaylist(p.id)}
+                  style={styles.dangerBtn}
+                >
                   <Text style={styles.dangerText}>Excluir</Text>
                 </TouchableOpacity>
               </View>
@@ -625,43 +691,162 @@ function MinhasPlaylistsScreen({ navigation, player, setQueue, setIndex }) {
   );
 }
 
-function PlaylistsStack({ player, setQueue, setIndex }) {
+
+function PlaylistsStack() {
   return (
-    <Stack.Navigator screenOptions={{ headerShown: false }}>
-      <Stack.Screen name="ListaPlaylists">
-        {(props) => (
-          <MinhasPlaylistsScreen
-            {...props}
-            player={player}
-            setQueue={setQueue}
-            setIndex={setIndex}
-          />
-        )}
-      </Stack.Screen>
-      <Stack.Screen name="Playlist">
-        {(props) => (
-          <PlaylistDetalhes
-            {...props}
-            player={player}
-            setQueue={setQueue}
-            setIndex={setIndex}
-          />
-        )}
-      </Stack.Screen>
-    </Stack.Navigator>
+    <InnerStack.Navigator screenOptions={{ headerShown: false }}>
+      <InnerStack.Screen name="ListaPlaylists" component={MinhasPlaylistsScreen} />
+      <InnerStack.Screen name="Playlist" component={PlaylistDetalhes} />
+    </InnerStack.Navigator>
   );
 }
 
 // -------------------------------------------------------------
-//  Navegação principal (Tabs) + barra global
+// Player Full (usa contexto)
+// -------------------------------------------------------------
+function PlayerFull() {
+  const { player, queue, index, setIndex } = usePlayerCtx();
+  const [liked, setLiked] = useState([]);
+  const insets = useSafeAreaInsets();
+
+  const current = queue[index];
+
+  if (!current) {
+    return (
+      <SafeAreaView style={styles.safeCenter}>
+        <Text style={{ color: '#fff' }}>Nenhuma música tocando.</Text>
+      </SafeAreaView>
+    );
+  }
+
+  useEffect(() => {
+    loadLiked().then(setLiked);
+  }, []);
+
+  const isLiked = liked.includes(current.id);
+
+  async function toggleLike() {
+    const exists = liked.includes(current.id);
+    const next = exists
+      ? liked.filter((x) => x !== current.id)
+      : [...liked, current.id];
+    setLiked(next);
+    await saveLiked(next);
+    if (!exists) Vibration.vibrate(25);
+  }
+
+  function playAt(i) {
+    if (!queue.length) return;
+    const norm = ((i % queue.length) + queue.length) % queue.length;
+    setIndex(norm);
+    player.play(queue[norm]);
+  }
+
+  const isThisPlaying = player.playingId === current.id && player.isPlaying;
+
+  return (
+    <SafeAreaView
+      style={{
+        flex: 1,
+        backgroundColor: '#0b0f14',
+        paddingTop: insets.top + 8,
+        paddingBottom: insets.bottom + 80,
+        paddingHorizontal: 16,
+      }}
+    >
+      <View style={{ alignItems: 'center', marginTop: 16 }}>
+        <Image
+          source={{ uri: current.capaUrl }}
+          style={{
+            width: 240,
+            height: 240,
+            borderRadius: 20,
+            backgroundColor: '#222',
+          }}
+        />
+      </View>
+
+      <View
+        style={{
+          flexDirection: 'row',
+          alignItems: 'center',
+          marginTop: 24,
+        }}
+      >
+        <View style={{ flex: 1 }}>
+          <Text style={{ color: '#fff', fontSize: 20, fontWeight: '700' }}>
+            {current.titulo}
+          </Text>
+          <Text style={{ color: '#c9d1d9', fontSize: 14 }}>
+            {current.artista}
+          </Text>
+        </View>
+
+        <TouchableOpacity onPress={toggleLike} style={{ padding: 8 }}>
+          <Text style={{ color: isLiked ? '#1db954' : '#fff', fontSize: 26 }}>
+            {isLiked ? '♥' : '♡'}
+          </Text>
+        </TouchableOpacity>
+      </View>
+
+      <View
+        style={{
+          flexDirection: 'row',
+          justifyContent: 'space-evenly',
+          alignItems: 'center',
+          marginTop: 40,
+        }}
+      >
+        <TouchableOpacity onPress={() => playAt(index - 1)}>
+          <Ionicons name="play-skip-back" size={28} color="#fff" />
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          onPress={() => (isThisPlaying ? player.pause() : playAt(index))}
+          style={{
+            width: 70,
+            height: 70,
+            borderRadius: 35,
+            backgroundColor: '#fff',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          <Ionicons
+            name={isThisPlaying ? 'pause' : 'play'}
+            size={30}
+            color="#0b0f14"
+          />
+        </TouchableOpacity>
+
+        <TouchableOpacity onPress={() => playAt(index + 1)}>
+          <Ionicons name="play-skip-forward" size={28} color="#fff" />
+        </TouchableOpacity>
+      </View>
+    </SafeAreaView>
+  );
+}
+
+// -------------------------------------------------------------
+// Navegação principal
 // -------------------------------------------------------------
 const Tab = createBottomTabNavigator();
+const RootStack = createNativeStackNavigator();
+
+function Tabs() {
+  return (
+    <Tab.Navigator screenOptions={{ headerShown: false }}>
+      <Tab.Screen name="Menu" component={MenuScreen} />
+      <Tab.Screen name="Buscar" component={BuscarScreen} />
+      <Tab.Screen name="Favoritas" component={BibliotecaScreen} />
+      <Tab.Screen name="Criar Playlist" component={CriarPlaylistScreen} />
+      <Tab.Screen name="Minhas Playlists" component={PlaylistsStack} />
+    </Tab.Navigator>
+  );
+}
 
 export default function App() {
-  // player único e estado global da fila
-  const player = useAudioPlayer();
-  const [queue, setQueue] = useState([]); // array de músicas
-  const [index, setIndex] = useState(0);  // posição atual
+  const navigationRef = useNavigationContainerRef();
 
   useEffect(() => {
     (async () => {
@@ -675,48 +860,52 @@ export default function App() {
       }
     })();
   }, []);
-  // garante que a fila exista desde o início
-  useEffect(() => {
-    if (queue.length === 0) {
-      setQueue(MUSICAS);  // fila inicial com todas as músicas
-      setIndex(0);        // começa da primeira
-    }
-  }, []);
 
   return (
-    <View style={{ flex: 1, backgroundColor: '#0b0f14' }}>
-      <NavigationContainer>
-        <Tab.Navigator screenOptions={{ headerShown: false }}>
-          <Tab.Screen name="Menu" component={MenuScreen} />
-          <Tab.Screen name="Buscar">
-            {() => <BuscarScreen player={player} setQueue={setQueue} setIndex={setIndex} />}
-          </Tab.Screen>
-          <Tab.Screen name="Favoritas">
-            {() => <BibliotecaScreen player={player} setQueue={setQueue} setIndex={setIndex} />}
-          </Tab.Screen>
-          <Tab.Screen name="Criar Playlist" component={CriarPlaylistScreen} />
-          <Tab.Screen name="Minhas Playlists">
-            {() => <PlaylistsStack player={player} setQueue={setQueue} setIndex={setIndex} />}
-          </Tab.Screen>
-        </Tab.Navigator>
-      </NavigationContainer>
+    <View style={{ flex: 1, backgroundColor: '#0b0f14' }} pointerEvents="box-none">
+      <PlayerProvider>
+        <NavigationContainer ref={navigationRef}>
+          <RootStack.Navigator screenOptions={{ headerShown: false }}>
+            <RootStack.Screen name="MainTabs" component={Tabs} />
+            <RootStack.Screen name="PlayerFull" component={PlayerFull} />
+          </RootStack.Navigator>
+        </NavigationContainer>
 
-      {/* Barra global fixa (prev/play/next) */}
-      <NowPlayingBar queue={queue} index={index} setIndex={setIndex} player={player} />
+        <NowPlayingBar navigationRef={navigationRef} />
+      </PlayerProvider>
     </View>
   );
 }
 
 // -------------------------------------------------------------
-//  ESTILOS
+// ESTILOS
 // -------------------------------------------------------------
 const styles = StyleSheet.create({
-  screen: {
+  safe: {
+    flex: 1,
+    backgroundColor: '#0b0f14',
+  },
+  safeCenter: {
+    flex: 1,
+    backgroundColor: '#0b0f14',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  scrollContent: {
     flexGrow: 1,
     backgroundColor: '#0b0f14',
     paddingHorizontal: 16,
     paddingTop: 12,
+    paddingBottom: 180,
   },
+  scrollContentWithFab: {
+    flexGrow: 1,
+    backgroundColor: '#0b0f14',
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 220,
+  },
+
   title: { color: '#fff', fontSize: 22, fontWeight: '700', marginBottom: 10 },
   subtitle: { color: '#c9d1d9', fontSize: 14 },
   muted: { color: '#8ea0b5', fontSize: 12 },
@@ -818,22 +1007,18 @@ const styles = StyleSheet.create({
   },
   dangerText: { color: '#ff6b81', fontWeight: '700' },
 
-  // --- Barra de controle global ---
-  // --- Barra de controle global (menor e acima da Tab) ---
   controlBar: {
     position: 'absolute',
     left: 0,
     right: 0,
-    bottom: TABBAR_HEIGHT + CONTROL_MARGIN, // fica acima da Tab
+    bottom: TABBAR_HEIGHT + CONTROL_MARGIN,
     backgroundColor: '#121923',
     borderWidth: 1,
     borderColor: '#223045',
     paddingHorizontal: 12,
-    paddingTop: 8,            // espaço p/ a linha do título
-    paddingBottom: 10,        // espaço p/ os botões
-    borderRadius: 0,
-
-    // eleva um pouco
+    paddingTop: 8,
+    paddingBottom: 10,
+    minHeight: 80,
     shadowColor: '#000',
     shadowOpacity: 0.2,
     shadowRadius: 6,
@@ -841,11 +1026,10 @@ const styles = StyleSheet.create({
     elevation: 6,
   },
 
-  // linha do topo: mini capa + textos
   nowTopRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 6, // separa do grupo de botões
+    marginBottom: 6,
   },
 
   nowThumb: {
@@ -857,23 +1041,21 @@ const styles = StyleSheet.create({
 
   nowTitle: {
     color: '#ffffff',
-    fontSize: 13,     // título um pouco maior
+    fontSize: 13,
     fontWeight: '800',
   },
 
   nowArtist: {
     color: '#9fb0c6',
-    fontSize: 11,     // menor que o título
+    fontSize: 11,
     fontWeight: '600',
   },
 
-  // linha de botões (base)
   nowControls: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
   },
-
 
   controlCenterBtn: {
     width: 42,
@@ -884,21 +1066,20 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
 
-  fab: { //botão criar
-  position: 'absolute',
-  bottom: SAFE_SCROLL_BOTTOM - 30, // acima da barra global
-  right: 20,
-  backgroundColor: '#1db954',
-  width: 60,
-  height: 60,
-  borderRadius: 30,
-  alignItems: 'center',
-  justifyContent: 'center',
-  shadowColor: '#000',
-  shadowOpacity: 0.3,
-  shadowRadius: 6,
-  elevation: 8,
+  fab: {
+    position: 'absolute',
+    bottom: 120,
+    right: 20,
+    backgroundColor: '#1db954',
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+    elevation: 8,
   },
-  fabText: { color: '#0b0f14', fontSize: 30, fontWeight: '900' }, // botao criar
-
+  fabText: { color: '#0b0f14', fontSize: 30, fontWeight: '900' },
 });
