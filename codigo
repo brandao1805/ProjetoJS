@@ -143,6 +143,8 @@ function useAudioPlayer() {
   const soundRef = useRef(null);
   const [playingId, setPlayingId] = useState(null);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [positionMillis, setPositionMillis] = useState(0);
+  const [durationMillis, setDurationMillis] = useState(1); // evita divisão por zero
 
   async function stopCurrent() {
     if (soundRef.current) {
@@ -154,18 +156,43 @@ function useAudioPlayer() {
     }
   }
 
+  // atualiza posição/duração toda vez que o áudio anda
+  function attachStatus(sound) {
+    sound.setOnPlaybackStatusUpdate((status) => {
+      if (!status.isLoaded) return;
+      setPositionMillis(status.positionMillis || 0);
+      setDurationMillis(status.durationMillis || 1);
+      // se acabou, marca como parado
+      if (status.didJustFinish) {
+        setIsPlaying(false);
+      }
+    });
+  }
+
   async function play(track) {
     if (!track) return;
+
+    // se já é a mesma música e está pausada -> só dar play
+    if (playingId === track.id && soundRef.current && !isPlaying) {
+      await soundRef.current.playAsync();
+      setIsPlaying(true);
+      return;
+    }
+
+    // se já é a mesma música e está tocando -> pausar
     if (playingId === track.id && isPlaying) {
       await pause();
       return;
     }
+
+    // senão: trocar de música
     await stopCurrent();
     try {
       const { sound } = await Audio.Sound.createAsync(track.audioModule, {
         shouldPlay: true,
       });
       soundRef.current = sound;
+      attachStatus(sound);
       setPlayingId(track.id);
       setIsPlaying(true);
     } catch (e) {
@@ -181,14 +208,34 @@ function useAudioPlayer() {
     }
   }
 
+  // pular para uma parte da música (0 a 1)
+  async function seekTo(percent) {
+    if (!soundRef.current) return;
+    const pos = percent * durationMillis;
+    try {
+      await soundRef.current.setPositionAsync(pos);
+    } catch (e) {
+      console.log('erro no seek:', e);
+    }
+  }
+
   useEffect(() => {
     return () => {
       if (soundRef.current) soundRef.current.unloadAsync();
     };
   }, []);
 
-  return { play, pause, isPlaying, playingId };
+  return {
+    play,
+    pause,
+    isPlaying,
+    playingId,
+    positionMillis,
+    durationMillis,
+    seekTo,
+  };
 }
+
 
 function PlayerProvider({ children }) {
   const player = useAudioPlayer();
@@ -711,6 +758,10 @@ function PlayerFull() {
 
   const current = queue[index];
 
+  useEffect(() => {
+    loadLiked().then(setLiked);
+  }, []);
+
   if (!current) {
     return (
       <SafeAreaView style={styles.safeCenter}>
@@ -719,11 +770,17 @@ function PlayerFull() {
     );
   }
 
-  useEffect(() => {
-    loadLiked().then(setLiked);
-  }, []);
-
   const isLiked = liked.includes(current.id);
+  const isThisPlaying = player.playingId === current.id && player.isPlaying;
+
+  // porcentagem tocada
+  const progress =
+    player.durationMillis > 0
+      ? player.positionMillis / player.durationMillis
+      : 0;
+
+  // pra conseguir saber o tamanho da barra e permitir clique
+  const [barWidth, setBarWidth] = useState(0);
 
   async function toggleLike() {
     const exists = liked.includes(current.id);
@@ -742,7 +799,13 @@ function PlayerFull() {
     player.play(queue[norm]);
   }
 
-  const isThisPlaying = player.playingId === current.id && player.isPlaying;
+  // formatar mm:ss
+  function fmt(ms) {
+    const totalSec = Math.floor(ms / 1000);
+    const min = Math.floor(totalSec / 60);
+    const sec = totalSec % 60;
+    return `${min}:${sec < 10 ? '0' + sec : sec}`;
+  }
 
   return (
     <SafeAreaView
@@ -789,6 +852,58 @@ function PlayerFull() {
         </TouchableOpacity>
       </View>
 
+      {/* BARRA DE PROGRESSO */}
+      <View style={{ marginTop: 28 }}>
+        <View
+          style={styles.progressBg}
+          onLayout={(e) => setBarWidth(e.nativeEvent.layout.width)}
+        >
+          {/* parte cheia */}
+          <View
+            style={[
+              styles.progressFill,
+              { width: `${Math.min(100, Math.max(0, progress * 100))}%` },
+            ]}
+          />
+          {/* bolinha */}
+          <View
+            style={[
+              styles.progressHandle,
+              {
+                left: barWidth * progress - 6, // centraliza a bolinha
+              },
+            ]}
+          />
+          {/* clique pra buscar */}
+          <TouchableOpacity
+            activeOpacity={1}
+            style={StyleSheet.absoluteFill}
+            onPress={(e) => {
+              if (!barWidth) return;
+              const x = e.nativeEvent.locationX;
+              const pct = x / barWidth;
+              player.seekTo(Math.min(1, Math.max(0, pct)));
+            }}
+          />
+        </View>
+
+        <View
+          style={{
+            flexDirection: 'row',
+            justifyContent: 'space-between',
+            marginTop: 6,
+          }}
+        >
+          <Text style={{ color: '#8ea0b5', fontSize: 12 }}>
+            {fmt(player.positionMillis)}
+          </Text>
+          <Text style={{ color: '#8ea0b5', fontSize: 12 }}>
+            {fmt(player.durationMillis)}
+          </Text>
+        </View>
+      </View>
+
+      {/* CONTROLES */}
       <View
         style={{
           flexDirection: 'row',
@@ -826,6 +941,7 @@ function PlayerFull() {
     </SafeAreaView>
   );
 }
+
 
 // -------------------------------------------------------------
 // Navegação principal
@@ -1082,4 +1198,23 @@ const styles = StyleSheet.create({
     elevation: 8,
   },
   fabText: { color: '#0b0f14', fontSize: 30, fontWeight: '900' },
+
+  progressBg: {
+    height: 10,
+    backgroundColor: '#1b2736',
+    borderRadius: 4,
+    overflow: 'hidden',
+  },
+  progressFill: {
+    height: 10,
+    backgroundColor: '#1db954',
+  },
+  progressHandle: {
+    position: 'absolute',
+    top: -1,
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: '#fff',
+  },
 });
