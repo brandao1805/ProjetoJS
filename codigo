@@ -780,7 +780,7 @@ function PlaylistDetalhes({ route }) {
                 <Image source={{ uri: item.capaUrl }} style={styles.cover} />
                 <View style={{ flex: 1, marginLeft: 12 }}>
                   <Text style={styles.songTitle}>
-                    {item.titulo} {idx === currentIndex ? '▶' : ''}
+                    {item.titulo}
                   </Text>
                   <Text style={styles.songArtist}>{item.artista}</Text>
                 </View>
@@ -823,7 +823,9 @@ function MinhasPlaylistsScreen({ navigation }) {
   const isFocused = useIsFocused();
 
   useEffect(() => {
-    if (isFocused) loadPlaylists().then(setPlaylists);
+    if (isFocused) {
+      loadPlaylists().then(setPlaylists);
+    }
   }, [isFocused]);
 
   async function excluirPlaylist(id) {
@@ -837,37 +839,39 @@ function MinhasPlaylistsScreen({ navigation }) {
     <SafeAreaView style={styles.safe}>
       <ScrollView contentContainerStyle={styles.scrollContent} bounces={false}>
         <Text style={styles.title}>Minhas Playlists</Text>
+
         {playlists.length === 0 ? (
           <Text style={styles.subtitle}>Nenhuma playlist criada ainda.</Text>
         ) : (
           playlists.map((p) => (
-            <View key={p.id} style={styles.playlistCard}>
+            <TouchableOpacity
+              key={p.id}
+              style={styles.playlistCard}
+              activeOpacity={0.85}
+              onPress={() => navigation.navigate('Playlist', { playlist: p })}
+            >
               <Image source={{ uri: p.capaUrl }} style={styles.playlistImg} />
+
               <View style={{ flex: 1, marginLeft: 10 }}>
                 <Text style={styles.cardTitle}>{p.nome}</Text>
                 <Text style={styles.muted}>{p.musicIds?.length || 0} música(s)</Text>
               </View>
-              <View style={{ flexDirection: 'row' }}>
-                <TouchableOpacity
-                  onPress={() => navigation.navigate('Playlist', { playlist: p })}
-                  style={[styles.editBtn, { marginRight: 20 }]} // mais espaço do excluir
-                >
-                  <Text style={styles.editText}>Abrir</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  onPress={() => excluirPlaylist(p.id)}
-                  style={styles.dangerBtn}
-                >
-                  <Text style={styles.dangerText}>Excluir</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
+
+              {/* Botão Excluir (único botão) */}
+              <TouchableOpacity
+                onPress={() => excluirPlaylist(p.id)}
+                style={[styles.dangerBtn, { marginLeft: 10 }]}
+              >
+                <Text style={styles.dangerText}>Excluir</Text>
+              </TouchableOpacity>
+            </TouchableOpacity>
           ))
         )}
       </ScrollView>
     </SafeAreaView>
   );
 }
+
 
 function PlaylistsStack() {
   return (
