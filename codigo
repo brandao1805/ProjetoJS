@@ -111,8 +111,8 @@ const MUSICAS = [
   },
 ];
 
-const TABBAR_HEIGHT = 60;
-const CONTROL_MARGIN = 14;
+const TABBAR_HEIGHT = 80;
+const CONTROL_MARGIN = 0;
 const KEY_LIKED = '@liked_songs';
 const KEY_PLAYLISTS = '@playlists';
 
@@ -1099,10 +1099,10 @@ function Tabs() {
             case 'Favoritas':
               iconName = focused ? 'heart' : 'heart-outline';
               break;
-            case 'Criar Playlist':
+            case 'Criar':
               iconName = focused ? 'add-circle' : 'add-circle-outline';
               break;
-            case 'Minhas Playlists':
+            case 'Playlists':
               iconName = focused ? 'musical-notes' : 'musical-notes-outline';
               break;
             default:
@@ -1115,8 +1115,8 @@ function Tabs() {
       <Tab.Screen name="Menu" component={MenuScreen} />
       <Tab.Screen name="Buscar" component={BuscarScreen} />
       <Tab.Screen name="Favoritas" component={BibliotecaScreen} />
-      <Tab.Screen name="Criar Playlist" component={CriarPlaylistScreen} />
-      <Tab.Screen name="Minhas Playlists" component={PlaylistsStack} />
+      <Tab.Screen name="Criar" component={CriarPlaylistScreen} />
+      <Tab.Screen name="Playlists" component={PlaylistsStack} />
     </Tab.Navigator>
   );
 }
@@ -1390,17 +1390,17 @@ const styles = StyleSheet.create({
   // BARRA AGORA TOCANDO
   controlBar: {
     position: 'absolute',
-    left: 14,
-    right: 14,
+    left: 0,
+    right: 0,
     bottom: TABBAR_HEIGHT + CONTROL_MARGIN,
-    backgroundColor: 'rgba(5,7,10,0.92)',
+    backgroundColor: '#05070a',
     borderWidth: 1,
     borderColor: 'rgba(0,184,212,0.05)',
     paddingHorizontal: 12,
     paddingTop: 8,
     paddingBottom: 10,
     minHeight: 80,
-    borderRadius: 18,
+    borderRadius: 0,
     shadowColor: '#000',
     shadowOpacity: 0.2,
     shadowRadius: 6,
@@ -1468,18 +1468,18 @@ const styles = StyleSheet.create({
 
   // PROGRESSO DO PLAYER FULL
   progressBg: {
-    height: 4,
+    height: 10,
     backgroundColor: '#1b2736',
     borderRadius: 999,
     overflow: 'hidden',
   },
   progressFill: {
-    height: 4,
+    height: 10,
     backgroundColor: '#00B8D4',
   },
   progressHandle: {
     position: 'absolute',
-    top: -5,
+    top: -1,
     width: 12,
     height: 12,
     borderRadius: 6,
