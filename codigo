@@ -1,9 +1,9 @@
 import * as React from 'react';
-import { useState, useEffect, useRef, useMemo, useContext } from 'react';
-import { View, Text, TextInput, TouchableOpacity, Image, StyleSheet, Alert, Vibration, ScrollView, } from 'react-native';
+import { useState, useEffect, useRef, useContext } from 'react';
+import { View, Text, TextInput, TouchableOpacity, Image, StyleSheet, Alert, Vibration, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { NavigationContainer, useNavigationContainerRef, useIsFocused, } from '@react-navigation/native';
+import { NavigationContainer, useNavigationContainerRef, useIsFocused } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -111,8 +111,8 @@ const MUSICAS = [
   },
 ];
 
-const TABBAR_HEIGHT = 64;
-const CONTROL_MARGIN = 20;
+const TABBAR_HEIGHT = 60;
+const CONTROL_MARGIN = 14;
 const KEY_LIKED = '@liked_songs';
 const KEY_PLAYLISTS = '@playlists';
 
@@ -156,36 +156,29 @@ function useAudioPlayer() {
     }
   }
 
-  // atualiza posição/duração toda vez que o áudio anda
   function attachStatus(sound) {
     sound.setOnPlaybackStatusUpdate((status) => {
       if (!status.isLoaded) return;
       setPositionMillis(status.positionMillis || 0);
       setDurationMillis(status.durationMillis || 1);
-      // se acabou, marca como parado
-      if (status.didJustFinish) {
-        setIsPlaying(false);
-      }
+      if (status.didJustFinish) setIsPlaying(false);
     });
   }
 
   async function play(track) {
     if (!track) return;
 
-    // se já é a mesma música e está pausada -> só dar play
     if (playingId === track.id && soundRef.current && !isPlaying) {
       await soundRef.current.playAsync();
       setIsPlaying(true);
       return;
     }
 
-    // se já é a mesma música e está tocando -> pausar
     if (playingId === track.id && isPlaying) {
       await pause();
       return;
     }
 
-    // senão: trocar de música
     await stopCurrent();
     try {
       const { sound } = await Audio.Sound.createAsync(track.audioModule, {
@@ -208,7 +201,6 @@ function useAudioPlayer() {
     }
   }
 
-  // pular para uma parte da música (0 a 1)
   async function seekTo(percent) {
     if (!soundRef.current) return;
     const pos = percent * durationMillis;
@@ -236,36 +228,24 @@ function useAudioPlayer() {
   };
 }
 
-
 function PlayerProvider({ children }) {
   const player = useAudioPlayer();
   const [queue, setQueue] = useState([]);
   const [index, setIndex] = useState(0);
 
-  // carrega uma fila inicial
   useEffect(() => {
     setQueue([MUSICAS[0]]);
     setIndex(0);
   }, []);
 
-  const value = {
-    player,
-    queue,
-    setQueue,
-    index,
-    setIndex,
-  };
+  const value = { player, queue, setQueue, index, setIndex };
 
-  return (
-    <PlayerContext.Provider value={value}>{children}</PlayerContext.Provider>
-  );
+  return <PlayerContext.Provider value={value}>{children}</PlayerContext.Provider>;
 }
 
 function usePlayerCtx() {
   const ctx = useContext(PlayerContext);
-  if (!ctx) {
-    throw new Error('usePlayerCtx precisa estar dentro do PlayerProvider');
-  }
+  if (!ctx) throw new Error('usePlayerCtx precisa estar dentro do PlayerProvider');
   return ctx;
 }
 
@@ -278,8 +258,7 @@ function NowPlayingBar({ navigationRef }) {
   if (!queue.length) return null;
 
   const current = queue[index];
-  const isThisPlaying =
-    current && player.playingId === current.id && player.isPlaying;
+  const isThisPlaying = current && player.playingId === current.id && player.isPlaying;
 
   function goToFull() {
     if (navigationRef?.current) {
@@ -344,7 +323,7 @@ function NowPlayingBar({ navigationRef }) {
 }
 
 // -------------------------------------------------------------
-// TELAS (todas pegam do contexto, não recebem props)
+// TELAS
 // -------------------------------------------------------------
 function MenuScreen() {
   return (
@@ -407,15 +386,16 @@ function BuscarScreen() {
     loadLiked().then(setLiked);
   }, []);
 
-  const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (!q) return MUSICAS;
-    return MUSICAS.filter(
+  // (sem useMemo) — filtro direto conforme disciplina
+  let filtered = MUSICAS;
+  const q = query.trim().toLowerCase();
+  if (q) {
+    filtered = MUSICAS.filter(
       (m) =>
         m.titulo.toLowerCase().includes(q) ||
         m.artista.toLowerCase().includes(q)
     );
-  }, [query]);
+  }
 
   async function toggleLike(id) {
     const exists = liked.includes(id);
@@ -460,7 +440,7 @@ function BuscarScreen() {
                 <Ionicons
                   name={likedThis ? 'heart' : 'heart-outline'}
                   size={18}
-                  color={likedThis ? '#1db954' : '#c9d1d9'}
+                  color={likedThis ? '#00B8D4' : '#c9d1d9'}
                 />
               </TouchableOpacity>
 
@@ -487,13 +467,10 @@ function BuscarScreen() {
 function BibliotecaScreen() {
   const { player, setQueue, setIndex } = usePlayerCtx();
   const [liked, setLiked] = useState([]);
-  const isFocused = useIsFocused(); // 👈 saber se a aba Favoritas está visível
+  const isFocused = useIsFocused();
 
-  // toda vez que a aba ganhar foco, ler de novo do AsyncStorage
   useEffect(() => {
-    if (isFocused) {
-      loadLiked().then(setLiked);
-    }
+    if (isFocused) loadLiked().then(setLiked);
   }, [isFocused]);
 
   const likedSongs = MUSICAS.filter((m) => liked.includes(m.id));
@@ -535,7 +512,6 @@ function BibliotecaScreen() {
     </SafeAreaView>
   );
 }
-
 
 function CriarPlaylistScreen() {
   const [nome, setNome] = useState('');
@@ -619,7 +595,25 @@ const InnerStack = createNativeStackNavigator();
 
 function PlaylistDetalhes({ route }) {
   const { player, setQueue, setIndex } = usePlayerCtx();
-  const playlist = route?.params?.playlist;
+  const [playlist, setPlaylist] = useState(route?.params?.playlist);
+
+  // Estados de edição
+  const [editingName, setEditingName] = useState(false);
+  const [newName, setNewName] = useState(route?.params?.playlist?.nome || '');
+  const [addingSongs, setAddingSongs] = useState(false);
+  const [chooseMap, setChooseMap] = useState({}); // seleção de músicas para adicionar
+
+  useEffect(() => {
+    // garantir versão atualizada ao abrir/voltar
+    (async () => {
+      const all = await loadPlaylists();
+      const found = all.find((p) => p.id === route?.params?.playlist?.id);
+      if (found) {
+        setPlaylist(found);
+        setNewName(found.nome);
+      }
+    })();
+  }, [route?.params?.playlist?.id]);
 
   if (!playlist) {
     return (
@@ -629,7 +623,7 @@ function PlaylistDetalhes({ route }) {
     );
   }
 
-  const songs = MUSICAS.filter((m) => playlist.musicIds.includes(m.id));
+  const songs = MUSICAS.filter((m) => (playlist.musicIds || []).includes(m.id));
   const [currentIndex, setCurrentIndex] = useState(0);
 
   function playAt(idx) {
@@ -641,11 +635,140 @@ function PlaylistDetalhes({ route }) {
     player.play(songs[norm]);
   }
 
+  async function persist(updated) {
+    const all = await loadPlaylists();
+    const next = all.map((p) => (p.id === updated.id ? updated : p));
+    await savePlaylists(next);
+    setPlaylist(updated);
+  }
+
+  async function salvarNovoNome() {
+    const n = newName.trim();
+    if (!n) return Alert.alert('Atenção', 'Informe um nome.');
+    const updated = { ...playlist, nome: n };
+    await persist(updated);
+    setEditingName(false);
+    Vibration.vibrate(20);
+  }
+
+  async function removerMusica(musicId) {
+    const updated = {
+      ...playlist,
+      musicIds: (playlist.musicIds || []).filter((id) => id !== musicId),
+    };
+    await persist(updated);
+    Vibration.vibrate(25);
+  }
+
+  function toggleEscolha(id) {
+    setChooseMap((prev) => ({ ...prev, [id]: !prev[id] }));
+  }
+
+  async function confirmarAdicao() {
+    const toAdd = Object.keys(chooseMap).filter((id) => chooseMap[id]);
+    if (toAdd.length === 0) {
+      setAddingSongs(false);
+      setChooseMap({});
+      return;
+    }
+    const setAtual = new Set(playlist.musicIds || []);
+    toAdd.forEach((id) => setAtual.add(id));
+    const updated = { ...playlist, musicIds: Array.from(setAtual) };
+    await persist(updated);
+    setAddingSongs(false);
+    setChooseMap({});
+    Vibration.vibrate(30);
+  }
+
+  // músicas ainda não presentes (para tela de adicionar)
+  const notInPlaylist = MUSICAS.filter(
+    (m) => !(playlist.musicIds || []).includes(m.id)
+  );
+
   return (
     <SafeAreaView style={styles.safe}>
       <ScrollView contentContainerStyle={styles.scrollContent} bounces={false}>
-        <Text style={styles.title}>Playlist: {playlist.nome}</Text>
+        {/* Header com nome + ações */}
+        <View style={styles.plHeader}>
+          {editingName ? (
+            <View style={styles.renameRow}>
+              <TextInput
+                value={newName}
+                onChangeText={setNewName}
+                placeholder="Nome da playlist"
+                placeholderTextColor="#8ea0b5"
+                style={[styles.input, { flex: 1, marginBottom: 0 }]}
+              />
+              <TouchableOpacity onPress={salvarNovoNome} style={[styles.actionBtn, { marginLeft: 10 }]}>
+                <Text style={styles.actionText}>Salvar</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={() => { setEditingName(false); setNewName(playlist.nome); }} style={[styles.actionBtnGhost, { marginLeft: 8 }]}>
+                <Text style={styles.actionGhostText}>Cancelar</Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <>
+              <Text style={styles.title}>Playlist: {playlist.nome}</Text>
+              <View style={styles.actionBar}>
+                <TouchableOpacity onPress={() => setEditingName(true)} style={styles.actionBtn}>
+                  <Ionicons name="pencil" size={14} color="#031015" />
+                  <Text style={styles.actionText}>Renomear</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => setAddingSongs(true)}
+                  style={[styles.actionBtn, { marginLeft: 10 }]}
+                >
+                  <Ionicons name="add" size={16} color="#031015" />
+                  <Text style={styles.actionText}>Adicionar músicas</Text>
+                </TouchableOpacity>
+              </View>
+            </>
+          )}
+        </View>
 
+        {/* MODO ADICIONAR MÚSICAS */}
+        {addingSongs && (
+          <View style={styles.addBox}>
+            <Text style={{ color: '#9aa9bc', marginBottom: 8 }}>
+              Selecione músicas para adicionar
+            </Text>
+
+            {notInPlaylist.length === 0 ? (
+              <Text style={styles.subtitle}>Todas as músicas já estão na playlist.</Text>
+            ) : (
+              notInPlaylist.map((m) => {
+                const on = !!chooseMap[m.id];
+                return (
+                  <TouchableOpacity
+                    key={m.id}
+                    onPress={() => toggleEscolha(m.id)}
+                    style={[styles.selectRow, on && styles.selectRowOn]}
+                  >
+                    <Image source={{ uri: m.capaUrl }} style={styles.coverSmall} />
+                    <View style={{ flex: 1, marginLeft: 10 }}>
+                      <Text style={styles.songTitle}>{m.titulo}</Text>
+                      <Text style={styles.songArtist}>{m.artista}</Text>
+                    </View>
+                    <Text style={[styles.tagText, on && styles.tagTextOn]}>
+                      {on ? '✓' : '+'}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })
+            )}
+
+            <View style={{ flexDirection: 'row', marginTop: 8 }}>
+              <TouchableOpacity onPress={confirmarAdicao} style={[styles.actionBtn, { marginRight: 10 }]}>
+                <Text style={styles.actionText}>Adicionar</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={() => { setAddingSongs(false); setChooseMap({}); }} style={styles.actionBtnGhost}>
+                <Text style={styles.actionGhostText}>Cancelar</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
+
+        {/* LISTA DA PLAYLIST */}
         {songs.length === 0 ? (
           <Text style={styles.subtitle}>Nenhuma música nessa playlist.</Text>
         ) : (
@@ -661,6 +784,8 @@ function PlaylistDetalhes({ route }) {
                   </Text>
                   <Text style={styles.songArtist}>{item.artista}</Text>
                 </View>
+
+                {/* Play */}
                 <TouchableOpacity
                   onPress={() => {
                     if (isThisPlaying) {
@@ -675,6 +800,14 @@ function PlaylistDetalhes({ route }) {
                     {isThisPlaying ? '❚❚' : '▶'}
                   </Text>
                 </TouchableOpacity>
+
+                {/* Excluir com espaçamento maior do Play */}
+                <TouchableOpacity
+                  onPress={() => removerMusica(item.id)}
+                  style={[styles.dangerBtn, { marginLeft: 14 }]}
+                >
+                  <Ionicons name="trash-outline" size={16} color="#ff6b81" />
+                </TouchableOpacity>
               </View>
             );
           })
@@ -684,15 +817,13 @@ function PlaylistDetalhes({ route }) {
   );
 }
 
+
 function MinhasPlaylistsScreen({ navigation }) {
   const [playlists, setPlaylists] = useState([]);
-  const isFocused = useIsFocused(); // 👈 descobre se essa tela está visível
+  const isFocused = useIsFocused();
 
-  // carrega ao montar E toda vez que voltar pra essa tela
   useEffect(() => {
-    if (isFocused) {
-      loadPlaylists().then(setPlaylists);
-    }
+    if (isFocused) loadPlaylists().then(setPlaylists);
   }, [isFocused]);
 
   async function excluirPlaylist(id) {
@@ -714,12 +845,12 @@ function MinhasPlaylistsScreen({ navigation }) {
               <Image source={{ uri: p.capaUrl }} style={styles.playlistImg} />
               <View style={{ flex: 1, marginLeft: 10 }}>
                 <Text style={styles.cardTitle}>{p.nome}</Text>
-                <Text style={styles.muted}>{p.musicIds.length} música(s)</Text>
+                <Text style={styles.muted}>{p.musicIds?.length || 0} música(s)</Text>
               </View>
               <View style={{ flexDirection: 'row' }}>
                 <TouchableOpacity
                   onPress={() => navigation.navigate('Playlist', { playlist: p })}
-                  style={[styles.editBtn, { marginRight: 8 }]}
+                  style={[styles.editBtn, { marginRight: 20 }]} // mais espaço do excluir
                 >
                   <Text style={styles.editText}>Abrir</Text>
                 </TouchableOpacity>
@@ -737,7 +868,6 @@ function MinhasPlaylistsScreen({ navigation }) {
     </SafeAreaView>
   );
 }
-
 
 function PlaylistsStack() {
   return (
@@ -773,13 +903,11 @@ function PlayerFull() {
   const isLiked = liked.includes(current.id);
   const isThisPlaying = player.playingId === current.id && player.isPlaying;
 
-  // porcentagem tocada
   const progress =
     player.durationMillis > 0
       ? player.positionMillis / player.durationMillis
       : 0;
 
-  // pra conseguir saber o tamanho da barra e permitir clique
   const [barWidth, setBarWidth] = useState(0);
 
   async function toggleLike() {
@@ -799,7 +927,6 @@ function PlayerFull() {
     player.play(queue[norm]);
   }
 
-  // formatar mm:ss
   function fmt(ms) {
     const totalSec = Math.floor(ms / 1000);
     const min = Math.floor(totalSec / 60);
@@ -811,7 +938,7 @@ function PlayerFull() {
     <SafeAreaView
       style={{
         flex: 1,
-        backgroundColor: '#0b0f14',
+        backgroundColor: '#05070a',
         paddingTop: insets.top + 8,
         paddingBottom: insets.bottom + 80,
         paddingHorizontal: 16,
@@ -846,7 +973,7 @@ function PlayerFull() {
         </View>
 
         <TouchableOpacity onPress={toggleLike} style={{ padding: 8 }}>
-          <Text style={{ color: isLiked ? '#1db954' : '#fff', fontSize: 26 }}>
+          <Text style={{ color: isLiked ? '#00B8D4' : '#fff', fontSize: 26 }}>
             {isLiked ? '♥' : '♡'}
           </Text>
         </TouchableOpacity>
@@ -858,23 +985,20 @@ function PlayerFull() {
           style={styles.progressBg}
           onLayout={(e) => setBarWidth(e.nativeEvent.layout.width)}
         >
-          {/* parte cheia */}
           <View
             style={[
               styles.progressFill,
               { width: `${Math.min(100, Math.max(0, progress * 100))}%` },
             ]}
           />
-          {/* bolinha */}
           <View
             style={[
               styles.progressHandle,
               {
-                left: barWidth * progress - 6, // centraliza a bolinha
+                left: barWidth * progress - 6,
               },
             ]}
           />
-          {/* clique pra buscar */}
           <TouchableOpacity
             activeOpacity={1}
             style={StyleSheet.absoluteFill}
@@ -942,7 +1066,6 @@ function PlayerFull() {
   );
 }
 
-
 // -------------------------------------------------------------
 // Navegação principal
 // -------------------------------------------------------------
@@ -951,7 +1074,44 @@ const RootStack = createNativeStackNavigator();
 
 function Tabs() {
   return (
-    <Tab.Navigator screenOptions={{ headerShown: false }}>
+    <Tab.Navigator
+      screenOptions={({ route }) => ({
+        headerShown: false,
+        tabBarStyle: {
+          backgroundColor: '#05070a',
+          borderTopColor: 'rgba(255,255,255,0.08)',
+          height: TABBAR_HEIGHT,
+          paddingBottom: 6,
+          paddingTop: 4,
+        },
+        tabBarActiveTintColor: '#00B8D4',
+        tabBarInactiveTintColor: '#8ea0b5',
+        tabBarLabelStyle: { fontSize: 11, fontWeight: '600' },
+        tabBarIcon: ({ color, focused }) => {
+          let iconName;
+          switch (route.name) {
+            case 'Menu':
+              iconName = focused ? 'home' : 'home-outline';
+              break;
+            case 'Buscar':
+              iconName = focused ? 'search' : 'search-outline';
+              break;
+            case 'Favoritas':
+              iconName = focused ? 'heart' : 'heart-outline';
+              break;
+            case 'Criar Playlist':
+              iconName = focused ? 'add-circle' : 'add-circle-outline';
+              break;
+            case 'Minhas Playlists':
+              iconName = focused ? 'musical-notes' : 'musical-notes-outline';
+              break;
+            default:
+              iconName = 'ellipse-outline';
+          }
+          return <Ionicons name={iconName} size={22} color={color} />;
+        },
+      })}
+    >
       <Tab.Screen name="Menu" component={MenuScreen} />
       <Tab.Screen name="Buscar" component={BuscarScreen} />
       <Tab.Screen name="Favoritas" component={BibliotecaScreen} />
@@ -978,7 +1138,7 @@ export default function App() {
   }, []);
 
   return (
-    <View style={{ flex: 1, backgroundColor: '#0b0f14' }} pointerEvents="box-none">
+    <View style={{ flex: 1, backgroundColor: '#05070a' }} pointerEvents="box-none">
       <PlayerProvider>
         <NavigationContainer ref={navigationRef}>
           <RootStack.Navigator screenOptions={{ headerShown: false }}>
@@ -994,185 +1154,286 @@ export default function App() {
 }
 
 // -------------------------------------------------------------
-// ESTILOS
+// ESTILOS (tema preto + cinza + ciano #00B8D4)
 // -------------------------------------------------------------
 const styles = StyleSheet.create({
+  // BASES
   safe: {
     flex: 1,
-    backgroundColor: '#0b0f14',
+    backgroundColor: '#05070a',
   },
   safeCenter: {
     flex: 1,
-    backgroundColor: '#0b0f14',
+    backgroundColor: '#05070a',
     alignItems: 'center',
     justifyContent: 'center',
   },
   scrollContent: {
     flexGrow: 1,
-    backgroundColor: '#0b0f14',
+    backgroundColor: '#05070a',
     paddingHorizontal: 16,
     paddingTop: 12,
     paddingBottom: 180,
   },
   scrollContentWithFab: {
     flexGrow: 1,
-    backgroundColor: '#0b0f14',
+    backgroundColor: '#05070a',
     paddingHorizontal: 16,
     paddingTop: 12,
     paddingBottom: 220,
   },
 
-  title: { color: '#fff', fontSize: 22, fontWeight: '700', marginBottom: 10 },
-  subtitle: { color: '#c9d1d9', fontSize: 14 },
-  muted: { color: '#8ea0b5', fontSize: 12 },
-
-  input: {
-    backgroundColor: '#121923',
-    borderColor: '#223045',
-    borderWidth: 1,
-    borderRadius: 12,
-    color: '#fff',
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    marginBottom: 12,
+  // TEXTOS
+  title: {
+    color: '#ffffff',
+    fontSize: 22,
+    fontWeight: '700',
+    letterSpacing: 0.2,
+    marginBottom: 6,
+  },
+  subtitle: {
+    color: '#9aa9bc',
+    fontSize: 14,
+  },
+  muted: {
+    color: '#7e8b9b',
+    fontSize: 12,
   },
 
-  row: { flexDirection: 'row', alignItems: 'center', paddingVertical: 8 },
+  // INPUT
+  input: {
+    backgroundColor: '#0f1620',
+    borderColor: '#1f2a38',
+    borderWidth: 1,
+    borderRadius: 14,
+    color: '#fff',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    marginTop: 10,
+    marginBottom: 12,
+    fontSize: 14,
+  },
 
+  // LINHAS / LISTAS
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    borderBottomWidth: 0.4,
+    borderBottomColor: 'rgba(255,255,255,0.02)',
+  },
+
+  // seleção de músicas
   selectRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#101826',
-    borderColor: '#263852',
+    backgroundColor: '#0f1620',
+    borderColor: 'rgba(0,184,212,0)',
     borderWidth: 1,
-    borderRadius: 12,
-    padding: 8,
+    borderRadius: 14,
+    padding: 10,
     marginBottom: 8,
   },
-  selectRowOn: { backgroundColor: '#132640', borderColor: '#3a5c8a' },
-
-  cover: { width: 56, height: 56, borderRadius: 8 },
-  coverSmall: { width: 44, height: 44, borderRadius: 8 },
-  playlistImg: { width: 52, height: 52, borderRadius: 10 },
-  cardImg: { width: '100%', height: 100, borderRadius: 12, marginBottom: 8 },
-
-  songTitle: { color: '#fff', fontSize: 14, fontWeight: '600' },
-  songArtist: { color: '#a5b3c2', fontSize: 12 },
-
-  playBtn: {
-    backgroundColor: '#1db954',
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    borderRadius: 10,
-    marginLeft: 8,
+  selectRowOn: {
+    backgroundColor: 'rgba(0,184,212,0.12)',
+    borderColor: 'rgba(0,184,212,0.6)',
   },
-  playText: { color: '#0b0f14', fontWeight: '700' },
+
+  // IMAGENS
+  cover: {
+    width: 56,
+    height: 56,
+    borderRadius: 10,
+    backgroundColor: '#131b26',
+  },
+  coverSmall: {
+    width: 44,
+    height: 44,
+    borderRadius: 10,
+    backgroundColor: '#131b26',
+  },
+  playlistImg: {
+    width: 52,
+    height: 52,
+    borderRadius: 14,
+    backgroundColor: '#131b26',
+  },
+  cardImg: {
+    width: '100%',
+    height: 110,
+    borderRadius: 14,
+    marginBottom: 10,
+    backgroundColor: '#131b26',
+  },
+
+  // TEXTOS DE MÚSICA
+  songTitle: {
+    color: '#ffffff',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  songArtist: {
+    color: '#8f9eb2',
+    fontSize: 12,
+    marginTop: 2,
+  },
+
+  // BOTÕES
+  playBtn: {
+    backgroundColor: '#00B8D4',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 12,
+    marginLeft: 8,
+    shadowColor: '#00B8D4',
+    shadowOpacity: 0.35,
+    shadowOffset: { width: 0, height: 1 },
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  playText: {
+    color: '#031015',
+    fontWeight: '700',
+    fontSize: 13,
+  },
 
   tag: {
     borderColor: '#2e3d56',
     borderWidth: 1,
     paddingHorizontal: 10,
     paddingVertical: 6,
-    borderRadius: 10,
+    borderRadius: 999,
     marginRight: 8,
+    backgroundColor: 'rgba(15,22,32,0.4)',
   },
-  tagOn: { backgroundColor: '#1db95422', borderColor: '#1db954' },
-  tagText: { color: '#c9d1d9', fontWeight: '700' },
-  tagTextOn: { color: '#1db954' },
+  tagOn: {
+    backgroundColor: 'rgba(0,184,212,0.12)',
+    borderColor: '#00B8D4',
+  },
+  tagText: {
+    color: '#c9d1d9',
+    fontWeight: '700',
+  },
+  tagTextOn: {
+    color: '#00B8D4',
+  },
 
-  cardsRow: { flexDirection: 'row', gap: 12, marginTop: 16, flexWrap: 'wrap' },
+  // CARDS DO MENU
+  cardsRow: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 16,
+    flexWrap: 'wrap',
+  },
   card: {
     width: '47%',
-    backgroundColor: '#101826',
-    borderColor: '#263852',
+    backgroundColor: '#0f1620',
+    borderColor: 'rgba(255,255,255,0.02)',
     borderWidth: 1,
-    borderRadius: 16,
-    padding: 10,
+    borderRadius: 18,
+    padding: 12,
     marginBottom: 10,
+    shadowColor: '#000',
+    shadowOpacity: 0.22,
+    shadowRadius: 5,
+    shadowOffset: { width: 0, height: 2 },
   },
-  cardTitle: { color: '#fff', fontWeight: '700' },
-  cardArtist: { color: '#a5b3c2', fontSize: 12 },
+  cardTitle: {
+    color: '#ffffff',
+    fontWeight: '700',
+    fontSize: 13.5,
+  },
+  cardArtist: {
+    color: '#8f9eb2',
+    fontSize: 11.5,
+    marginTop: 2,
+  },
 
+  // PLAYLIST CARDS
   playlistCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#0f1622',
-    borderColor: '#263852',
+    backgroundColor: '#0f1620',
+    borderColor: 'rgba(255,255,255,0.025)',
     borderWidth: 1,
-    borderRadius: 12,
-    padding: 10,
-    marginTop: 8,
+    borderRadius: 16,
+    padding: 12,
+    marginTop: 10,
   },
   editBtn: {
-    backgroundColor: '#13301f',
-    borderColor: '#1db95455',
+    backgroundColor: 'rgba(0,184,212,0.08)',
+    borderColor: 'rgba(0,184,212,0.6)',
     borderWidth: 1,
     paddingHorizontal: 10,
-    paddingVertical: 8,
+    paddingVertical: 7,
     borderRadius: 10,
   },
-  editText: { color: '#1db954', fontWeight: '700' },
-
+  editText: {
+    color: '#00B8D4',
+    fontWeight: '700',
+    fontSize: 12,
+  },
   dangerBtn: {
-    backgroundColor: '#2a0f13',
-    borderColor: '#7a1f2a',
+    backgroundColor: 'rgba(182,52,65,0.12)',
+    borderColor: 'rgba(182,52,65,0.45)',
     borderWidth: 1,
     paddingHorizontal: 12,
-    paddingVertical: 8,
+    paddingVertical: 7,
     borderRadius: 10,
   },
-  dangerText: { color: '#ff6b81', fontWeight: '700' },
+  dangerText: {
+    color: '#ff6b81',
+    fontWeight: '700',
+    fontSize: 12,
+  },
 
+  // BARRA AGORA TOCANDO
   controlBar: {
     position: 'absolute',
-    left: 0,
-    right: 0,
+    left: 14,
+    right: 14,
     bottom: TABBAR_HEIGHT + CONTROL_MARGIN,
-    backgroundColor: '#121923',
+    backgroundColor: 'rgba(5,7,10,0.92)',
     borderWidth: 1,
-    borderColor: '#223045',
+    borderColor: 'rgba(0,184,212,0.05)',
     paddingHorizontal: 12,
     paddingTop: 8,
     paddingBottom: 10,
     minHeight: 80,
+    borderRadius: 18,
     shadowColor: '#000',
     shadowOpacity: 0.2,
     shadowRadius: 6,
     shadowOffset: { width: 0, height: 3 },
     elevation: 6,
   },
-
   nowTopRow: {
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 6,
   },
-
   nowThumb: {
-    width: 28,
-    height: 28,
-    borderRadius: 4,
+    width: 30,
+    height: 30,
+    borderRadius: 8,
     backgroundColor: '#0b0f14',
   },
-
   nowTitle: {
     color: '#ffffff',
     fontSize: 13,
     fontWeight: '800',
   },
-
   nowArtist: {
     color: '#9fb0c6',
     fontSize: 11,
-    fontWeight: '600',
+    fontWeight: '500',
+    marginTop: 1,
   },
-
   nowControls: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
   },
-
   controlCenterBtn: {
     width: 42,
     height: 42,
@@ -1182,39 +1443,94 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
 
+  // FAB
   fab: {
     position: 'absolute',
     bottom: 120,
     right: 20,
-    backgroundColor: '#1db954',
-    width: 60,
-    height: 60,
-    borderRadius: 30,
+    backgroundColor: '#00B8D4',
+    width: 62,
+    height: 62,
+    borderRadius: 31,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOpacity: 0.3,
+    shadowColor: '#00B8D4',
+    shadowOpacity: 0.35,
     shadowRadius: 6,
     elevation: 8,
   },
-  fabText: { color: '#0b0f14', fontSize: 30, fontWeight: '900' },
+  fabText: {
+    color: '#031015',
+    fontSize: 32,
+    fontWeight: '900',
+    lineHeight: 33,
+  },
 
+  // PROGRESSO DO PLAYER FULL
   progressBg: {
-    height: 10,
+    height: 4,
     backgroundColor: '#1b2736',
-    borderRadius: 4,
+    borderRadius: 999,
     overflow: 'hidden',
   },
   progressFill: {
-    height: 10,
-    backgroundColor: '#1db954',
+    height: 4,
+    backgroundColor: '#00B8D4',
   },
   progressHandle: {
     position: 'absolute',
-    top: -1,
+    top: -5,
     width: 12,
     height: 12,
     borderRadius: 6,
     backgroundColor: '#fff',
   },
+    // --- Playlist Detalhes: header/ações/edição ---
+  plHeader: {
+    marginBottom: 8,
+  },
+  actionBar: {
+    flexDirection: 'row',
+    marginTop: 8,
+  },
+  actionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#00B8D4',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+  },
+  actionText: {
+    color: '#031015',
+    fontWeight: '700',
+    marginLeft: 6,
+    fontSize: 12,
+  },
+  actionBtnGhost: {
+    borderWidth: 1,
+    borderColor: 'rgba(0,184,212,0.5)',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+    backgroundColor: 'rgba(0,184,212,0.08)',
+  },
+  actionGhostText: {
+    color: '#00B8D4',
+    fontWeight: '700',
+    fontSize: 12,
+  },
+  renameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  addBox: {
+    backgroundColor: '#0f1620',
+    borderColor: 'rgba(255,255,255,0.025)',
+    borderWidth: 1,
+    borderRadius: 16,
+    padding: 12,
+    marginBottom: 12,
+  },
+
 });
