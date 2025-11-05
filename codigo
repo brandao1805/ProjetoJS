@@ -10,7 +10,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Audio } from 'expo-av';
 
 // -------------------------------------------------------------
-//  DADOS
+//  DADOS (mock local para o trabalho; módulos de áudio no /assets)
 // -------------------------------------------------------------
 const MUSICAS = [
   {
@@ -109,43 +109,115 @@ const MUSICAS = [
       'https://cdn-images.dzcdn.net/images/cover/6a607b99dfcb2dcd32f787ed0e11bf41/500x500-000000-80-0-0.jpg',
     audioModule: require('./assets/FlowEspacial.mp3'),
   },
+  {
+    id: '13',
+    titulo: 'Falta Você',
+    artista: 'Thiaguinho',
+    capaUrl:
+      'https://cdn-images.dzcdn.net/images/cover/51fafcf8a809c4f7287c706c0066c862/500x500-000000-80-0-0.jpg',
+    audioModule: require('./assets/FaltaVoce.mp3'),
+  },
+  {
+    id: '14',
+    titulo: 'Window Shopper',
+    artista: '50 Cent',
+    capaUrl:
+      'https://cdn-images.dzcdn.net/images/cover/58ec83e8f74b55096f2115523eb9e7df/500x500-000000-80-0-0.jpg',
+    audioModule: require('./assets/WindowShopper.mp3'),
+  },
+  {
+    id: '15',
+    titulo: 'Eu Sou 157',
+    artista: 'Racionais MCs',
+    capaUrl:
+      'https://cdn-images.dzcdn.net/images/cover/e04b68c5a1aa7a29128d05e7ff9e3084/500x500.jpg',
+    audioModule: require('./assets/157.mp3'),
+  },
+  {
+    id: '16',
+    titulo: 'Ela Só Quer Se Bronzear',
+    artista: 'MC Jvilla, MC Negão Original, MC Marks',
+    capaUrl:
+      'https://cdn-images.dzcdn.net/images/cover/cafead8dd58fe9e717b6aa6c055d23f1/500x500-000000-80-0-0.jpg',
+    audioModule: require('./assets/Bronzear.mp3'),
+  },
+  {
+    id: '17',
+    titulo: 'Coração Partido',
+    artista: 'Grupo Menos é Mais',
+    capaUrl:
+      'https://cdn-images.dzcdn.net/images/cover/dc8a602909b1cd752aad82af47ce4810/500x500-000000-80-0-0.jpg',
+    audioModule: require('./assets/Coracao.mp3'),
+  },
+  {
+    id: '18',
+    titulo: 'Thats My Way',
+    artista: 'Edi Rock, Seu Jorge',
+    capaUrl:
+      'https://cdn-images.dzcdn.net/images/cover/22608bd63725993ffa4270c1d814b51c/500x500-000000-80-0-0.jpg',
+    audioModule: require('./assets/EdiRock.mp3'),
+  },
+  {
+    id: '19',
+    titulo: 'Naticongo',
+    artista: 'Natiruts',
+    capaUrl:
+      'https://cdn-images.dzcdn.net/images/cover/17c05d1219c67c2b52e935c449db3c10/500x500-000000-80-0-0.jpg',
+    audioModule: require('./assets/Naticongo.mp3'),
+  },
+  {
+    id: '20',
+    titulo: 'So Sick',
+    artista: 'Ne-Yo',
+    capaUrl:
+      'https://cdn-images.dzcdn.net/images/cover/ad97c751643e185a348fb13199c49944/500x500-000000-80-0-0.jpg',
+    audioModule: require('./assets/SoSick.mp3'),
+  },
 ];
 
+// alturas e chaves de armazenamento
 const TABBAR_HEIGHT = 80;
 const CONTROL_MARGIN = 0;
 const KEY_LIKED = '@liked_songs';
 const KEY_PLAYLISTS = '@playlists';
 
 // -------------------------------------------------------------
-// AsyncStorage helpers
+// AsyncStorage helpers (curtidas e playlists)
 // -------------------------------------------------------------
 async function loadLiked() {
+  // retorna array de ids curtidos
   const raw = await AsyncStorage.getItem(KEY_LIKED);
   return raw ? JSON.parse(raw) : [];
-}
+} // carrega curtida
 async function saveLiked(ids) {
   await AsyncStorage.setItem(KEY_LIKED, JSON.stringify(ids));
 }
+  // carrega playlist
 async function loadPlaylists() {
+  // retorna array de objetos {id, nome, capaUrl, musicIds[]}
   const raw = await AsyncStorage.getItem(KEY_PLAYLISTS);
   return raw ? JSON.parse(raw) : [];
-}
+} // salva playlist
 async function savePlaylists(arr) {
   await AsyncStorage.setItem(KEY_PLAYLISTS, JSON.stringify(arr));
 }
 
 // -------------------------------------------------------------
-// Player Context
+// Player Context (fonte única de verdade do player)
 // -------------------------------------------------------------
 const PlayerContext = React.createContext(null);
 
 function useAudioPlayer() {
+  // ref guarda a instância do som (não re-renderiza)
   const soundRef = useRef(null);
-  const [playingId, setPlayingId] = useState(null);
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [positionMillis, setPositionMillis] = useState(0);
-  const [durationMillis, setDurationMillis] = useState(1); // evita divisão por zero
 
+  // estados do player expostos para a UI
+  const [playingId, setPlayingId] = useState(null);     // id da faixa atual
+  const [isPlaying, setIsPlaying] = useState(false);    // tocando/pausado
+  const [positionMillis, setPositionMillis] = useState(0); // posição atual
+  const [durationMillis, setDurationMillis] = useState(1); // duração (≠0 p/ evitar divisão por zero)
+
+  // encerra/descarrega a faixa atual (quando troca de música)
   async function stopCurrent() {
     if (soundRef.current) {
       try {
@@ -156,29 +228,36 @@ function useAudioPlayer() {
     }
   }
 
+  // callback nativo do expo-av para atualizar posição/duração
   function attachStatus(sound) {
     sound.setOnPlaybackStatusUpdate((status) => {
       if (!status.isLoaded) return;
       setPositionMillis(status.positionMillis || 0);
       setDurationMillis(status.durationMillis || 1);
+
+      // quando chega ao fim, quem decide a próxima é o Provider via fila/índice
       if (status.didJustFinish) setIsPlaying(false);
     });
   }
 
+  // inicia/pausa/troca reprodução
   async function play(track) {
     if (!track) return;
 
+    // se for a mesma faixa e está pausada → retomar
     if (playingId === track.id && soundRef.current && !isPlaying) {
       await soundRef.current.playAsync();
       setIsPlaying(true);
       return;
     }
 
+    // se for a mesma faixa e está tocando → pausar
     if (playingId === track.id && isPlaying) {
       await pause();
       return;
     }
 
+    // troca de faixa: descarrega a anterior e carrega a nova
     await stopCurrent();
     try {
       const { sound } = await Audio.Sound.createAsync(track.audioModule, {
@@ -201,10 +280,10 @@ function useAudioPlayer() {
     }
   }
 
+  // “seek” para uma porcentagem da faixa (0…1), usado no slider
   async function seekTo(percent) {
     if (!soundRef.current) return;
-    if (durationMillis <= 1) return; // evita seek antes de carregar
-    const pos = Math.max(0, Math.min(1, percent)) * durationMillis;
+    const pos = percent * durationMillis;
     try {
       await soundRef.current.setPositionAsync(pos);
     } catch (e) {
@@ -212,7 +291,7 @@ function useAudioPlayer() {
     }
   }
 
-
+  // desmontagem: descarrega áudio
   useEffect(() => {
     return () => {
       if (soundRef.current) soundRef.current.unloadAsync();
@@ -231,21 +310,27 @@ function useAudioPlayer() {
 }
 
 function PlayerProvider({ children }) {
+  // player contém os métodos/estados de áudio (expo-av)
   const player = useAudioPlayer();
+
+  // fila e índice corrente (controlam qual faixa está "selecionada")
   const [queue, setQueue] = useState([]);
   const [index, setIndex] = useState(0);
 
+  // ao abrir o app, inicia com todas as músicas e escolhe uma aleatória
   useEffect(() => {
     const idx = Math.floor(Math.random() * MUSICAS.length);
-    setQueue(MUSICAS);   // fila com todas as músicas
-    setIndex(idx);       // começa numa música aleatória
+    setQueue(MUSICAS);   // fila com todas as faixas
+    setIndex(idx);       // índice inicial aleatório
   }, []);
 
+  // expõe tudo via contexto
   const value = { player, queue, setQueue, index, setIndex };
 
   return <PlayerContext.Provider value={value}>{children}</PlayerContext.Provider>;
 }
 
+// hook de acesso ao contexto (garante que esteja dentro do provider)
 function usePlayerCtx() {
   const ctx = useContext(PlayerContext);
   if (!ctx) throw new Error('usePlayerCtx precisa estar dentro do PlayerProvider');
@@ -253,7 +338,7 @@ function usePlayerCtx() {
 }
 
 // -------------------------------------------------------------
-// Barra global (usa contexto)
+// Barra Agora Tocando (fixa sobre a Tab, usa a fila/índice do contexto)
 // -------------------------------------------------------------
 function NowPlayingBar({ navigationRef }) {
   const { player, queue, index, setIndex } = usePlayerCtx();
@@ -264,14 +349,16 @@ function NowPlayingBar({ navigationRef }) {
   const isThisPlaying = current && player.playingId === current.id && player.isPlaying;
 
   function goToFull() {
+    // leva para tela completa do player
     if (navigationRef?.current) {
       navigationRef.current.navigate('PlayerFull');
     }
   }
 
+  // navega na fila usando o índice global (próxima/anterior)
   function playAt(i) {
     if (!queue.length) return;
-    const norm = ((i % queue.length) + queue.length) % queue.length;
+    const norm = ((i % queue.length) + queue.length) % queue.length; // normaliza índice (loop)
     setIndex(norm);
     player.play(queue[norm]);
   }
@@ -326,16 +413,14 @@ function NowPlayingBar({ navigationRef }) {
 }
 
 // -------------------------------------------------------------
-// TELAS
+// TELAS — Menu/Buscar/Favoritas/Criar/Playlists
 // -------------------------------------------------------------
 function MenuScreen() {
+  // layout estático para compor cards por categoria
   return (
     <SafeAreaView style={styles.safe}>
       <ScrollView contentContainerStyle={styles.scrollContent} bounces={false}>
         <Text style={styles.title}>SpotiFei</Text>
-        <Text style={styles.subtitle}>
-          App player: música para todas as pessoas
-        </Text>
 
         <Text style={[styles.title, { fontSize: 18, marginTop: 20 }]}>
           Músicas Brasileiras
@@ -380,16 +465,21 @@ function MenuScreen() {
   );
 }
 
+// -------------------------------------------------------------
+// TELA BUSCAR
+// -------------------------------------------------------------
+
 function BuscarScreen() {
   const { player, setQueue, setIndex } = usePlayerCtx();
   const [query, setQuery] = useState('');
   const [liked, setLiked] = useState([]);
 
+  // carrega curtidas ao montar
   useEffect(() => {
     loadLiked().then(setLiked);
   }, []);
 
-  // (sem useMemo) — filtro direto conforme disciplina
+  // filtro simples
   let filtered = MUSICAS;
   const q = query.trim().toLowerCase();
   if (q) {
@@ -400,6 +490,7 @@ function BuscarScreen() {
     );
   }
 
+  // curtir/descurtir salva no AsyncStorage e vibra
   async function toggleLike(id) {
     const exists = liked.includes(id);
     const next = exists ? liked.filter((x) => x !== id) : [...liked, id];
@@ -436,6 +527,7 @@ function BuscarScreen() {
                 <Text style={styles.songArtist}>{item.artista}</Text>
               </View>
 
+              {/* curtir/descurtir */}
               <TouchableOpacity
                 onPress={() => toggleLike(item.id)}
                 style={[styles.tag, likedThis && styles.tagOn]}
@@ -447,6 +539,7 @@ function BuscarScreen() {
                 />
               </TouchableOpacity>
 
+              {/* tocar: configura a fila com todas as músicas e define índice atual */}
               <TouchableOpacity
                 onPress={() => {
                   const all = MUSICAS;
@@ -469,10 +562,14 @@ function BuscarScreen() {
   );
 }
 
+// -------------------------------------------------------------
+// TELA FAVORITOS
+// -------------------------------------------------------------
+
 function BibliotecaScreen() {
   const { player, setQueue, setIndex } = usePlayerCtx();
   const [liked, setLiked] = useState([]);
-  const isFocused = useIsFocused();
+  const isFocused = useIsFocused(); // recarrega quando a aba recebe foco
 
   useEffect(() => {
     if (isFocused) loadLiked().then(setLiked);
@@ -499,6 +596,7 @@ function BibliotecaScreen() {
                 </View>
                 <TouchableOpacity
                   onPress={() => {
+                    // define a fila como as curtidas e posiciona no índice correto
                     const all = MUSICAS;
                     const i = all.findIndex((m) => m.id === item.id);
                     setQueue(all);
@@ -520,10 +618,15 @@ function BibliotecaScreen() {
   );
 }
 
+// -------------------------------------------------------------
+// TELA CRIAR PLAYLIST
+// -------------------------------------------------------------
+
 function CriarPlaylistScreen() {
+  // formulário simples com seleção de músicas e persistência
   const [nome, setNome] = useState('');
   const [playlists, setPlaylists] = useState([]);
-  const [selected, setSelected] = useState({});
+  const [selected, setSelected] = useState({}); // mapa id->boolean
 
   useEffect(() => {
     loadPlaylists().then(setPlaylists);
@@ -590,6 +693,7 @@ function CriarPlaylistScreen() {
         })}
       </ScrollView>
 
+      {/* botão flutuante de confirmar criação */}
       <TouchableOpacity onPress={criar} style={styles.fab}>
         <Text style={styles.fabText}>＋</Text>
       </TouchableOpacity>
@@ -597,21 +701,26 @@ function CriarPlaylistScreen() {
   );
 }
 
-// ---------- Playlists (Stack) ----------
+// ---------- Navegação interna das Playlists (lista -> detalhes) ----------
 const InnerStack = createNativeStackNavigator();
+
+// -------------------------------------------------------------
+// TELA PLAYLIST ABERTA
+// -------------------------------------------------------------
 
 function PlaylistDetalhes({ route }) {
   const { player, setQueue, setIndex } = usePlayerCtx();
   const [playlist, setPlaylist] = useState(route?.params?.playlist);
+  const [currentIndex, setCurrentIndex] = useState(0);
 
-  // Estados de edição
+  // estados de edição (renomear, adicionar/remover)
   const [editingName, setEditingName] = useState(false);
   const [newName, setNewName] = useState(route?.params?.playlist?.nome || '');
   const [addingSongs, setAddingSongs] = useState(false);
-  const [chooseMap, setChooseMap] = useState({}); // seleção de músicas para adicionar
+  const [chooseMap, setChooseMap] = useState({}); // seleção para adicionar
 
+  // sempre que entrar, recarrega a versão atual da playlist do AsyncStorage
   useEffect(() => {
-    // garantir versão atualizada ao abrir/voltar
     (async () => {
       const all = await loadPlaylists();
       const found = all.find((p) => p.id === route?.params?.playlist?.id);
@@ -631,17 +740,18 @@ function PlaylistDetalhes({ route }) {
   }
 
   const songs = MUSICAS.filter((m) => (playlist.musicIds || []).includes(m.id));
-  const [currentIndex, setCurrentIndex] = useState(0);
 
   function playAt(idx) {
     if (!songs.length) return;
+    // normaliza índice para o range da playlist
     const norm = ((idx % songs.length) + songs.length) % songs.length;
     setCurrentIndex(norm);
-    setQueue(songs);
-    setIndex(norm);
+    setQueue(songs);      // define a fila como as músicas da playlist
+    setIndex(norm);       // posiciona na música clicada
     player.play(songs[norm]);
   }
 
+  // persiste alterações da playlist inteira (renomear/add/remove)
   async function persist(updated) {
     const all = await loadPlaylists();
     const next = all.map((p) => (p.id === updated.id ? updated : p));
@@ -678,6 +788,7 @@ function PlaylistDetalhes({ route }) {
       setChooseMap({});
       return;
     }
+    // garante que não duplica música na playlist
     const setAtual = new Set(playlist.musicIds || []);
     toAdd.forEach((id) => setAtual.add(id));
     const updated = { ...playlist, musicIds: Array.from(setAtual) };
@@ -687,7 +798,7 @@ function PlaylistDetalhes({ route }) {
     Vibration.vibrate(30);
   }
 
-  // músicas ainda não presentes (para tela de adicionar)
+  // músicas que ainda não estão na playlist (para tela de adicionar)
   const notInPlaylist = MUSICAS.filter(
     (m) => !(playlist.musicIds || []).includes(m.id)
   );
@@ -695,7 +806,7 @@ function PlaylistDetalhes({ route }) {
   return (
     <SafeAreaView style={styles.safe}>
       <ScrollView contentContainerStyle={styles.scrollContent} bounces={false}>
-        {/* Header com nome + ações */}
+        {/* Header com nome + ações (renomear/adicionar) */}
         <View style={styles.plHeader}>
           {editingName ? (
             <View style={styles.renameRow}>
@@ -733,7 +844,7 @@ function PlaylistDetalhes({ route }) {
           )}
         </View>
 
-        {/* MODO ADICIONAR MÚSICAS */}
+        {/* Modo para adicionar novas músicas à playlist */}
         {addingSongs && (
           <View style={styles.addBox}>
             <Text style={{ color: '#9aa9bc', marginBottom: 8 }}>
@@ -775,7 +886,7 @@ function PlaylistDetalhes({ route }) {
           </View>
         )}
 
-        {/* LISTA DA PLAYLIST */}
+        {/* lista de músicas da playlist, com play e excluir */}
         {songs.length === 0 ? (
           <Text style={styles.subtitle}>Nenhuma música nessa playlist.</Text>
         ) : (
@@ -792,7 +903,7 @@ function PlaylistDetalhes({ route }) {
                   <Text style={styles.songArtist}>{item.artista}</Text>
                 </View>
 
-                {/* Play */}
+                {/* Play da faixa dentro da playlist */}
                 <TouchableOpacity
                   onPress={() => {
                     if (isThisPlaying) {
@@ -808,7 +919,7 @@ function PlaylistDetalhes({ route }) {
                   </Text>
                 </TouchableOpacity>
 
-                {/* Excluir com espaçamento maior do Play */}
+                {/* Excluir (com espaçamento do botão de play) */}
                 <TouchableOpacity
                   onPress={() => removerMusica(item.id)}
                   style={[styles.dangerBtn, { marginLeft: 14 }]}
@@ -824,11 +935,15 @@ function PlaylistDetalhes({ route }) {
   );
 }
 
+// -------------------------------------------------------------
+// TELA MINHAS PLAYLIST
+// -------------------------------------------------------------
 
 function MinhasPlaylistsScreen({ navigation }) {
   const [playlists, setPlaylists] = useState([]);
   const isFocused = useIsFocused();
 
+  // recarrega sempre que esta tela ganhar foco
   useEffect(() => {
     if (isFocused) {
       loadPlaylists().then(setPlaylists);
@@ -851,6 +966,7 @@ function MinhasPlaylistsScreen({ navigation }) {
           <Text style={styles.subtitle}>Nenhuma playlist criada ainda.</Text>
         ) : (
           playlists.map((p) => (
+            // toda a "card" é um botão de abrir
             <TouchableOpacity
               key={p.id}
               style={styles.playlistCard}
@@ -864,7 +980,7 @@ function MinhasPlaylistsScreen({ navigation }) {
                 <Text style={styles.muted}>{p.musicIds?.length || 0} música(s)</Text>
               </View>
 
-              {/* Botão Excluir (único botão) */}
+              {/* Botão de excluir (único botão visível no card) */}
               <TouchableOpacity
                 onPress={() => excluirPlaylist(p.id)}
                 style={[styles.dangerBtn, { marginLeft: 10 }]}
@@ -879,7 +995,6 @@ function MinhasPlaylistsScreen({ navigation }) {
   );
 }
 
-
 function PlaylistsStack() {
   return (
     <InnerStack.Navigator screenOptions={{ headerShown: false }}>
@@ -890,15 +1005,19 @@ function PlaylistsStack() {
 }
 
 // -------------------------------------------------------------
-// Player Full (usa contexto)
+// Player Full (tela detalhada: like, barra de progresso e controles)
 // -------------------------------------------------------------
 function PlayerFull() {
   const { player, queue, index, setIndex } = usePlayerCtx();
   const [liked, setLiked] = useState([]);
   const insets = useSafeAreaInsets();
 
+  // controla a largura da barra para converter toque em porcentagem
+  const [barWidth, setBarWidth] = useState(0);
+
   const current = queue[index];
 
+  // carrega curtidas quando a tela abre
   useEffect(() => {
     loadLiked().then(setLiked);
   }, []);
@@ -914,12 +1033,11 @@ function PlayerFull() {
   const isLiked = liked.includes(current.id);
   const isThisPlaying = player.playingId === current.id && player.isPlaying;
 
+  // porcentagem da música tocada (0…1)
   const progress =
     player.durationMillis > 0
       ? player.positionMillis / player.durationMillis
       : 0;
-
-  const [barWidth, setBarWidth] = useState(0);
 
   async function toggleLike() {
     const exists = liked.includes(current.id);
@@ -938,6 +1056,7 @@ function PlayerFull() {
     player.play(queue[norm]);
   }
 
+  // formata mm:ss a partir de ms
   function fmt(ms) {
     const totalSec = Math.floor(ms / 1000);
     const min = Math.floor(totalSec / 60);
@@ -967,6 +1086,7 @@ function PlayerFull() {
         />
       </View>
 
+      {/* título + like */}
       <View
         style={{
           flexDirection: 'row',
@@ -990,26 +1110,29 @@ function PlayerFull() {
         </TouchableOpacity>
       </View>
 
-      {/* BARRA DE PROGRESSO */}
+      {/* barra de progresso com handle e seek por toque */}
       <View style={{ marginTop: 28 }}>
         <View
           style={styles.progressBg}
           onLayout={(e) => setBarWidth(e.nativeEvent.layout.width)}
         >
+          {/* parte preenchida */}
           <View
             style={[
               styles.progressFill,
               { width: `${Math.min(100, Math.max(0, progress * 100))}%` },
             ]}
           />
+          {/* bolinha (handle) */}
           <View
             style={[
               styles.progressHandle,
               {
-                left: barWidth * progress - 6,
+                left: barWidth * progress - 6, // centraliza o handle
               },
             ]}
           />
+          {/* toque para pular para um ponto da faixa */}
           <TouchableOpacity
             activeOpacity={1}
             style={StyleSheet.absoluteFill}
@@ -1022,6 +1145,7 @@ function PlayerFull() {
           />
         </View>
 
+        {/* tempos corrente e total */}
         <View
           style={{
             flexDirection: 'row',
@@ -1038,7 +1162,7 @@ function PlayerFull() {
         </View>
       </View>
 
-      {/* CONTROLES */}
+      {/* controles principais */}
       <View
         style={{
           flexDirection: 'row',
@@ -1078,12 +1202,13 @@ function PlayerFull() {
 }
 
 // -------------------------------------------------------------
-// Navegação principal
+// Navegação principal (Tabs + Stack raiz)
 // -------------------------------------------------------------
 const Tab = createBottomTabNavigator();
 const RootStack = createNativeStackNavigator();
 
 function Tabs() {
+  // customização de estilo da Tab de acordo com a paleta do app
   return (
     <Tab.Navigator
       screenOptions={({ route }) => ({
@@ -1099,6 +1224,7 @@ function Tabs() {
         tabBarInactiveTintColor: '#8ea0b5',
         tabBarLabelStyle: { fontSize: 11, fontWeight: '600' },
         tabBarIcon: ({ color, focused }) => {
+          // ícones por rota (apenas visual)
           let iconName;
           switch (route.name) {
             case 'Menu':
@@ -1135,6 +1261,7 @@ function Tabs() {
 export default function App() {
   const navigationRef = useNavigationContainerRef();
 
+  // configura o modo de áudio do expo-av (ex.: iOS tocar em modo silencioso)
   useEffect(() => {
     (async () => {
       try {
@@ -1158,6 +1285,7 @@ export default function App() {
           </RootStack.Navigator>
         </NavigationContainer>
 
+        {/* barra global fixa acima da TabBar */}
         <NowPlayingBar navigationRef={navigationRef} />
       </PlayerProvider>
     </View>
@@ -1184,14 +1312,14 @@ const styles = StyleSheet.create({
     backgroundColor: '#05070a',
     paddingHorizontal: 16,
     paddingTop: 12,
-    paddingBottom: 180,
+    paddingBottom: 180, // espaço p/ a NowPlayingBar não cobrir conteúdo
   },
   scrollContentWithFab: {
     flexGrow: 1,
     backgroundColor: '#05070a',
     paddingHorizontal: 16,
     paddingTop: 12,
-    paddingBottom: 220,
+    paddingBottom: 220, // extra por causa do FAB
   },
 
   // TEXTOS
@@ -1371,7 +1499,6 @@ const styles = StyleSheet.create({
     padding: 12,
     marginTop: 10,
   },
-  
   dangerBtn: {
     backgroundColor: 'rgba(182,52,65,0.12)',
     borderColor: 'rgba(182,52,65,0.45)',
@@ -1386,13 +1513,13 @@ const styles = StyleSheet.create({
     fontSize: 12,
   },
 
-  // BARRA AGORA TOCANDO
+  // BARRA AGORA TOCANDO (fixa acima da TabBar)
   controlBar: {
     position: 'absolute',
     left: 0,
     right: 0,
     bottom: TABBAR_HEIGHT + CONTROL_MARGIN,
-    backgroundColor: '#05070a',
+    backgroundColor: '#05070a', // sem transparência
     borderWidth: 1,
     borderColor: 'rgba(0,184,212,0.05)',
     paddingHorizontal: 12,
@@ -1442,7 +1569,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
 
-  // FAB
+  // FAB (criar playlist)
   fab: {
     position: 'absolute',
     bottom: 120,
@@ -1484,7 +1611,8 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     backgroundColor: '#fff',
   },
-    // --- Playlist Detalhes: header/ações/edição ---
+
+  // Playlist Detalhes: header/ações/edição
   plHeader: {
     marginBottom: 8,
   },
@@ -1531,5 +1659,4 @@ const styles = StyleSheet.create({
     padding: 12,
     marginBottom: 12,
   },
-
 });
