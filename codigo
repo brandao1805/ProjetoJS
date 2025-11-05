@@ -203,13 +203,15 @@ function useAudioPlayer() {
 
   async function seekTo(percent) {
     if (!soundRef.current) return;
-    const pos = percent * durationMillis;
+    if (durationMillis <= 1) return; // evita seek antes de carregar
+    const pos = Math.max(0, Math.min(1, percent)) * durationMillis;
     try {
       await soundRef.current.setPositionAsync(pos);
     } catch (e) {
       console.log('erro no seek:', e);
     }
   }
+
 
   useEffect(() => {
     return () => {
@@ -234,8 +236,9 @@ function PlayerProvider({ children }) {
   const [index, setIndex] = useState(0);
 
   useEffect(() => {
-    setQueue([MUSICAS[0]]);
-    setIndex(0);
+    const idx = Math.floor(Math.random() * MUSICAS.length);
+    setQueue(MUSICAS);   // fila com todas as músicas
+    setIndex(idx);       // começa numa música aleatória
   }, []);
 
   const value = { player, queue, setQueue, index, setIndex };
@@ -348,7 +351,7 @@ function MenuScreen() {
         </View>
 
         <Text style={[styles.title, { fontSize: 18, marginTop: 20 }]}>
-          Músicas Gringas
+          Músicas Estrangeiras
         </Text>
         <View style={styles.cardsRow}>
           {MUSICAS.filter((m) => m.id === '4' || m.id === '9').map((m) => (
@@ -446,8 +449,10 @@ function BuscarScreen() {
 
               <TouchableOpacity
                 onPress={() => {
-                  setQueue([item]);
-                  setIndex(0);
+                  const all = MUSICAS;
+                  const i = all.findIndex((m) => m.id === item.id);
+                  setQueue(all);
+                  setIndex(i >= 0 ? i : 0);
                   isThisPlaying ? player.pause() : player.play(item);
                 }}
                 style={styles.playBtn}
@@ -494,8 +499,10 @@ function BibliotecaScreen() {
                 </View>
                 <TouchableOpacity
                   onPress={() => {
-                    setQueue([item]);
-                    setIndex(0);
+                    const all = MUSICAS;
+                    const i = all.findIndex((m) => m.id === item.id);
+                    setQueue(all);
+                    setIndex(i >= 0 ? i : 0);
                     isThisPlaying ? player.pause() : player.play(item);
                   }}
                   style={styles.playBtn}
@@ -1364,19 +1371,7 @@ const styles = StyleSheet.create({
     padding: 12,
     marginTop: 10,
   },
-  editBtn: {
-    backgroundColor: 'rgba(0,184,212,0.08)',
-    borderColor: 'rgba(0,184,212,0.6)',
-    borderWidth: 1,
-    paddingHorizontal: 10,
-    paddingVertical: 7,
-    borderRadius: 10,
-  },
-  editText: {
-    color: '#00B8D4',
-    fontWeight: '700',
-    fontSize: 12,
-  },
+  
   dangerBtn: {
     backgroundColor: 'rgba(182,52,65,0.12)',
     borderColor: 'rgba(182,52,65,0.45)',
