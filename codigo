@@ -569,24 +569,28 @@ function BuscarScreen() {
 function BibliotecaScreen() {
   const { player, setQueue, setIndex } = usePlayerCtx();
   const [liked, setLiked] = useState([]);
-  const isFocused = useIsFocused(); // recarrega quando a aba recebe foco
+  const isFocused = useIsFocused();
 
+  // sempre que a tela ganhar foco, recarrega as curtidas
   useEffect(() => {
     if (isFocused) loadLiked().then(setLiked);
   }, [isFocused]);
 
+  // lista só com as favoritas
   const likedSongs = MUSICAS.filter((m) => liked.includes(m.id));
 
   return (
     <SafeAreaView style={styles.safe}>
       <ScrollView contentContainerStyle={styles.scrollContent} bounces={false}>
         <Text style={styles.title}>Favoritas ({likedSongs.length})</Text>
+
         {likedSongs.length === 0 ? (
           <Text style={styles.subtitle}>Nenhuma música curtida.</Text>
         ) : (
           likedSongs.map((item) => {
             const isThisPlaying =
               player.playingId === item.id && player.isPlaying;
+
             return (
               <View key={item.id} style={styles.row}>
                 <Image source={{ uri: item.capaUrl }} style={styles.cover} />
@@ -594,12 +598,13 @@ function BibliotecaScreen() {
                   <Text style={styles.songTitle}>{item.titulo}</Text>
                   <Text style={styles.songArtist}>{item.artista}</Text>
                 </View>
+
                 <TouchableOpacity
                   onPress={() => {
-                    // define a fila como as curtidas e posiciona no índice correto
-                    const all = MUSICAS;
-                    const i = all.findIndex((m) => m.id === item.id);
-                    setQueue(all);
+                    //  enfileira APENAS as favoritas
+                    const queueOnlyFavs = likedSongs;
+                    const i = queueOnlyFavs.findIndex((m) => m.id === item.id);
+                    setQueue(queueOnlyFavs);
                     setIndex(i >= 0 ? i : 0);
                     isThisPlaying ? player.pause() : player.play(item);
                   }}
