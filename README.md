@@ -1,6 +1,6 @@
 # 🎵 SpotiFei - Player de Música
 
-O objetivo do projeto é criar um player funcional utilizando **somente os recursos ensinados em aula**.
+O objetivo do projeto é criar um player funcional de música.
 
 ## 🎯 Visão Geral
 
